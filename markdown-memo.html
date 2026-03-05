@@ -4,6 +4,51 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>📝 Markdown Memo</title>
+  <script>
+  // ── パスワード認証（SHA-256）──
+  (function(){
+    var HASH = '8a7f4755a9c4828519bd091faa04d6edbe7a88b8dfa519d1e1ac1f26c550187c';
+    if(sessionStorage.getItem('auth')===HASH) return; // 認証済み
+    document.addEventListener('DOMContentLoaded', function(){
+      // 認証オーバーレイを表示
+      var ov = document.createElement('div');
+      ov.id = 'authOverlay';
+      ov.innerHTML = [
+        '<div id="authBox">',
+        '  <div style="font-size:36px;margin-bottom:8px;">🔒</div>',
+        '  <div style="font-size:18px;font-weight:700;margin-bottom:4px;">Markdown Memo</div>',
+        '  <div style="font-size:12px;color:#868e96;margin-bottom:20px;">パスワードを入力してください</div>',
+        '  <input id="authInp" type="password" placeholder="パスワード" autocomplete="current-password"',
+        '    style="width:100%;padding:10px 14px;border:1.5px solid #dee2e6;border-radius:8px;font-size:15px;outline:none;box-sizing:border-box;"/>',
+        '  <div id="authErr" style="color:#e03131;font-size:11px;margin-top:6px;min-height:16px;"></div>',
+        '  <button id="authBtn" onclick="window.__authCheck()"',
+        '    style="width:100%;padding:11px;background:#4c6ef5;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-top:4px;touch-action:manipulation;">',
+        '    ログイン</button>',
+        '</div>'
+      ].join('');
+      ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#f0f2f5;display:flex;align-items:center;justify-content:center;';
+      document.body.appendChild(ov);
+      // Enterキー対応
+      document.getElementById('authInp').addEventListener('keydown', function(e){ if(e.key==='Enter') window.__authCheck(); });
+      setTimeout(function(){ var i=document.getElementById('authInp'); if(i) i.focus(); }, 100);
+    });
+    window.__authCheck = async function(){
+      var pw = document.getElementById('authInp').value;
+      var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
+      var hex = Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+      if(hex === HASH){
+        sessionStorage.setItem('auth', HASH);
+        var ov = document.getElementById('authOverlay');
+        if(ov){ ov.style.transition='opacity .3s'; ov.style.opacity='0'; setTimeout(function(){ ov.remove(); }, 300); }
+      } else {
+        var err = document.getElementById('authErr');
+        var inp = document.getElementById('authInp');
+        if(err) err.textContent = 'パスワードが違います';
+        if(inp){ inp.value=''; inp.style.borderColor='#e03131'; setTimeout(function(){ inp.style.borderColor='#dee2e6'; },1500); inp.focus(); }
+      }
+    };
+  })();
+  </script>
   <!-- KaTeX (math) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
