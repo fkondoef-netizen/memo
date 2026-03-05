@@ -3650,6 +3650,18 @@ var _unsaved = false;
 window.addEventListener('beforeunload', function(){
   if(_unsaved){ syncNote(); _unsaved=false; }
 });
+
+// ── ウィンドウリサイズ時にグラフを再描画 ──
+var _resizeTimer;
+window.addEventListener('resize', function(){
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(function(){
+    if(typeof agCurTab!=='undefined' && agCurTab==='compare') agCmpDraw();
+    if(typeof agCurTab!=='undefined' && agCurTab==='chart') { if(typeof agDrawChart==='function') agDrawChart(); }
+    if(typeof wrDrawAllCharts==='function') wrDrawAllCharts();
+    if(typeof salCurTab!=='undefined' && salCurTab==='graph'){ if(typeof salDrawChartWithView==='function') requestAnimationFrame(salDrawChartWithView); }
+  }, 150);
+});
 document.getElementById('editor').addEventListener('input',e=>{
   onChange();
   const ta=e.target;
@@ -5768,7 +5780,9 @@ function salSave(){
   gdAutoBackup();
 }
 
+var salCurTab = 'form';
 function salSwitchTab(tab){
+  salCurTab = tab;
   document.querySelectorAll('#mp-sales .ag-pane').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('#mp-sales .ag-tab').forEach(b=>b.classList.remove('active'));
   var pane=document.getElementById('salPane'+tab.charAt(0).toUpperCase()+tab.slice(1));
@@ -7786,6 +7800,18 @@ function agCmpYears(){ var y={}; agRecords.forEach(function(r){y[r.date.slice(0,
 function agCmpWeeks(){ var w={}; agRecords.forEach(function(r){w[agCmpISOWeek(r.date)]=true;}); return Object.keys(w).map(Number).sort(function(a,b){return a-b;}); }
 function agCmpFieldLabel(){ var f=CMP_FIELDS.find(function(x){return x.id===agCmpField;}); return f?f.label:agCmpField; }
 
+// キャンバスに実寸が出るまでリトライしてから描画
+function agCmpWaitAndDraw(retries){
+  var canvas=document.getElementById('agCmpCanvas');
+  if(!canvas) return;
+  var par=canvas.parentElement;
+  if((par.clientWidth||0)>20){
+    agCmpDraw();
+  } else if((retries||0)<25){
+    setTimeout(function(){ agCmpWaitAndDraw((retries||0)+1); },30);
+  }
+}
+
 function agCmpInit(){
   var years=agCmpYears();
   var prev=Object.assign({},agCmpYearsVis); agCmpYearsVis={};
@@ -7795,23 +7821,23 @@ function agCmpInit(){
   var sel=document.getElementById('agCmpFieldSel');
   if(sel) sel.value=agCmpField;
   agCmpBuildCtrl();
-  requestAnimationFrame(agCmpDraw);
+  agCmpWaitAndDraw();
 }
 
 function agCmpSetMode(mode){
   agCmpMode=mode;
   document.querySelectorAll('.ag-cmp-tab').forEach(function(b){ b.classList.toggle('active',b.dataset.cmpmode===mode); });
   agCmpBuildCtrl();
-  requestAnimationFrame(agCmpDraw);
+  agCmpWaitAndDraw();
 }
 
-function agCmpFieldChange(v){ agCmpField=v; requestAnimationFrame(agCmpDraw); }
+function agCmpFieldChange(v){ agCmpField=v; agCmpWaitAndDraw(); }
 
 function agCmpToggleYear(yr){
   agCmpYearsVis[yr]=!agCmpYearsVis[yr];
   var el=document.querySelector('.ag-cmp-yr[data-yr="'+yr+'"]');
   if(el) el.classList.toggle('off',!agCmpYearsVis[yr]);
-  requestAnimationFrame(agCmpDraw);
+  agCmpDraw();
 }
 
 function agCmpWeekNav(dir){
@@ -7820,7 +7846,7 @@ function agCmpWeekNav(dir){
   idx=Math.max(0,Math.min(wks.length-1,idx+dir));
   agCmpWeekNum=wks[idx];
   var sel=document.getElementById('agCmpWkSel'); if(sel) sel.value=agCmpWeekNum;
-  requestAnimationFrame(agCmpDraw);
+  agCmpDraw();
 }
 
 function agCmpBuildCtrl(){
@@ -7867,7 +7893,10 @@ function agCmpBuildCtrl(){
 function agCmpDraw(){
   var canvas=document.getElementById('agCmpCanvas'); if(!canvas) return;
   var par=canvas.parentElement;
-  canvas.width=par.clientWidth||600; canvas.height=par.clientHeight||300;
+  var pw=par.clientWidth, ph=par.clientHeight;
+  // 親がまだレイアウトされていない場合はリトライ
+  if(!pw || pw<20){ agCmpWaitAndDraw(); return; }
+  canvas.width=pw; canvas.height=ph||300;
   if(canvas.width<20||canvas.height<20) return;
   var ctx=canvas.getContext('2d');
   var isDark=document.documentElement.getAttribute('data-theme')==='dark';
@@ -9056,34 +9085,38 @@ document.addEventListener('DOMContentLoaded', _patchRenderListForSearch);
         </button>
       </div>
 
-      <!-- iOS向けヒント -->
+      <!-- iOS向けヒント（iPad で表示） -->
       <div class="gd-ios-hint" id="gdIOSHint" style="display:none;margin-top:12px;">
-        <b>📱 iPad Chrome でのデータ同期手順</b><br><br>
-        <b>【外出前・Mac で】</b><br>
-        ⬇️ バックアップをダウンロード<br>
-        → Google ドライブアプリで memo_backup.json を Google Drive に移動<br><br>
-        <b>【外出先・iPad Chrome で】</b><br>
-        📤 ファイルから復元<br>
-        → 「参照」→「Google ドライブ」→ memo_backup.json を選択<br><br>
-        <b>【帰社前・iPad で】</b><br>
-        ⬇️ バックアップをダウンロード → Google Drive に移動<br>
-        → Mac Chrome で 📤 ファイルから復元
+        <b>📱 iPad でのバックアップ作成・同期手順</b><br>
+        <hr style="border:none;border-top:1px solid #b8d8ef;margin:6px 0;">
+        <b>【iPad → Mac へデータを移す場合】</b><br>
+        ① ⬇️「バックアップをダウンロード」→ <b>ファイルアプリ</b>に保存<br>
+        ② ファイルアプリで memo_backup.json を開く<br>
+        　→「共有」→「Google ドライブ」にアップロード<br>
+        ③ Mac Chrome で📤「ファイルから復元」→ Google ドライブから選択<br>
+        <hr style="border:none;border-top:1px solid #b8d8ef;margin:6px 0;">
+        <b>【Mac → iPad へデータを移す場合】</b><br>
+        ① Mac Chrome で⬇️「バックアップをダウンロード」<br>
+        ② Google ドライブに memo_backup.json をアップロード<br>
+        ③ iPad Chrome で📤「ファイルから復元」<br>
+        　→「参照」→「Google ドライブ」→ memo_backup.json を選択<br>
+        <hr style="border:none;border-top:1px solid #b8d8ef;margin:6px 0;">
+        <span style="font-size:10px;opacity:0.8;">⚠️ Mac（ローカルHTML）と iPad（GitHub Pages）はデータが別です。必ずバックアップで同期してください。</span>
       </div>
 
-      <!-- Mac向け: iPad初回セットアップガイド -->
+      <!-- Mac向け: iPad バックアップ同期ガイド -->
       <div id="gdIPadGuide" style="margin-top:12px;background:#f0faf0;border:1px solid #81c784;border-radius:8px;padding:12px;font-size:12px;line-height:1.9;">
-        <b>📱 iPad Chrome で初めて開く手順（一度だけ）</b>
+        <b>📱 iPad でアプリを開く URL（ブックマーク登録済みの場合はスキップ）</b>
         <hr style="border:none;border-top:1px solid #c8e6c9;margin:6px 0;">
-        <b>① Mac の Google Drive フォルダに HTML を置く</b><br>
-        　Finder で <code style="background:#fff;padding:1px 5px;border-radius:3px;font-size:10px;">markdown-memo.html</code> を Google Drive の同期フォルダにコピー<br>
-        <b>② iPad の Google Drive アプリで開く</b><br>
-        　Google Drive アプリ → ファイルを見つける<br>
-        　→ ファイル名右の「<b>…</b>」→「<b>別のアプリで開く</b>」→「<b>Chrome</b>」✅<br>
-        <b>③ Chrome でブックマーク登録</b><br>
-        　アドレスバー右の「…」→「<b>ブックマークに追加</b>」<br>
-        　→ 次回からブックマークから起動！<br>
+        iPad Chrome のアドレスバーに入力：<br>
+        <code style="background:#fff;padding:3px 7px;border-radius:4px;font-size:11px;display:inline-block;margin:4px 0;word-break:break-all;">https://fkondoef-netizen.github.io/memo/markdown-memo.html</code><br>
+        → 開いたら「…」→「ブックマークに追加」で次回から素早く開けます<br>
         <hr style="border:none;border-top:1px solid #c8e6c9;margin:6px 0;">
-        <span style="color:#666;font-size:10px;">⚠️ Mac の Chrome ブックマークを同期しても、iPad では file:// のパスが異なるため開けません。Google Drive アプリ経由で一度開いてから iPad 側でブックマーク登録してください。</span>
+        <b>🔄 Mac ↔ iPad データ同期の流れ</b><br>
+        <b>Mac → iPad：</b>⬇️ バックアップをダウンロード → Google Drive 保存 → iPad で📤 ファイルから復元<br>
+        <b>iPad → Mac：</b>iPad で⬇️ ダウンロード → Google Drive 保存 → Mac で📤 ファイルから復元<br>
+        <hr style="border:none;border-top:1px solid #c8e6c9;margin:6px 0;">
+        <span style="color:#666;font-size:10px;">⚠️ Mac（ローカルHTML）と iPad（GitHub Pages）はデータが別々に保存されます。バックアップで同期してください。</span>
       </div>
 
       <div class="gd-last-save" id="gdLastSave"></div>
