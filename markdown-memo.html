@@ -1791,6 +1791,15 @@
                 <button class="btn btn-g" onclick="salClearForm()">クリア</button>
                 <button class="btn btn-g" onclick="salExportCSV()">⬇ CSV</button>
               </div>
+
+              <!-- Excel一括インポート -->
+              <div class="ag-drop-zone" id="salDropZone" style="margin-top:10px;">
+                <span class="dz-icon">📥</span>
+                <span class="dz-text">sales_data.xlsx をここにドロップ<br>日次データを一括インポート</span>
+                <span class="dz-hint">ファイル名に "sales" を含む .xlsx ファイル</span>
+                <input type="file" accept=".xlsx,.xls" onchange="salHandleFileInput(this.files)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;">
+              </div>
+              <div id="salImportLog" class="ag-import-log" style="display:none;"></div>
             </div>
           </div>
 
@@ -5977,6 +5986,117 @@ function salDrawChart(){
   });
 }
 
+
+// ── 収支タブ: Excel ドラッグ＆ドロップ インポート ──
+(function(){
+  document.addEventListener('DOMContentLoaded', function(){
+    var zone = document.getElementById('salDropZone');
+    if(!zone) return;
+    zone.addEventListener('dragover', function(e){
+      e.preventDefault(); e.stopPropagation();
+      zone.classList.add('drag-over');
+    });
+    zone.addEventListener('dragleave', function(e){
+      if(!zone.contains(e.relatedTarget)) zone.classList.remove('drag-over');
+    });
+    zone.addEventListener('drop', function(e){
+      e.preventDefault(); e.stopPropagation();
+      zone.classList.remove('drag-over');
+      var files = e.dataTransfer.files;
+      if(files.length) salHandleFileInput(files);
+    });
+  });
+})();
+
+function salHandleFileInput(files){
+  Array.from(files).forEach(function(file){
+    var name = file.name.toLowerCase();
+    if(name.endsWith('.xlsx') || name.endsWith('.xls')){
+      salImportXlsx(file);
+    } else {
+      salLog('err', file.name + ' → .xlsx ファイルのみ対応');
+    }
+  });
+}
+
+function salLog(type, msg){
+  var logEl = document.getElementById('salImportLog');
+  if(!logEl) return;
+  logEl.style.display = 'block';
+  var div = document.createElement('div');
+  div.className = type === 'ok' ? 'ag-import-ok' : 'ag-import-err';
+  div.textContent = (type === 'ok' ? '✅ ' : '❌ ') + msg;
+  logEl.insertBefore(div, logEl.firstChild);
+}
+
+// Excel列マッピング:
+//  A=0:日付  B=1:トマト収穫量  C=2:トマト売上  D=3:トマト人件費  E=4:トマトその他
+//  F=5:レタス出荷株数  G=6:レタス売上  H=7:レタス人件費  I=8:レタスその他
+function salImportXlsx(file){
+  if(!window.XLSX){ salLog('err', 'SheetJS 未読込 — ページを再読込してください'); return; }
+  var reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      var wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+      var ws = wb.Sheets['収支データ'] || wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:false});
+      // ヘッダー行を飛ばす (行0〜3はタイトル/ヘッダー行)
+      // データ行を探す: A列がYYYY/MM/DD 形式の行
+      var imported = 0, skipped = 0;
+      rows.forEach(function(row){
+        if(!row || !row[0]) return;
+        var rawDate = row[0];
+        // 日付文字列を YYYY-MM-DD に変換
+        var dateStr = null;
+        if(typeof rawDate === 'string'){
+          // YYYY/MM/DD または YYYY-MM-DD
+          var m = rawDate.trim().match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+          if(m) dateStr = m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+        } else if(rawDate instanceof Date || (typeof rawDate === 'object' && rawDate)){
+          var d = new Date(rawDate);
+          if(!isNaN(d)){
+            dateStr = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+          }
+        }
+        if(!dateStr) return; // スキップ
+
+        function toNum(v){ var n=parseFloat(v); return isNaN(n)?null:n; }
+        var entry = {
+          date:     dateStr,
+          tomHarv:  toNum(row[1]),
+          tomSales: toNum(row[2]),
+          tomLabor: toNum(row[3]),
+          tomOther: toNum(row[4]),
+          letShip:  toNum(row[5]),
+          letSales: toNum(row[6]),
+          letLabor: toNum(row[7]),
+          letOther: toNum(row[8])
+        };
+        // 全フィールドがnullならスキップ
+        var hasData = Object.keys(entry).some(function(k){ return k !== 'date' && entry[k] != null; });
+        if(!hasData){ skipped++; return; }
+        var idx = salesData.findIndex(function(r){ return r.date === dateStr; });
+        if(idx >= 0){
+          // 既存レコードのnull項目だけ上書き（入力済みデータを保護）
+          Object.keys(entry).forEach(function(k){
+            if(k !== 'date' && entry[k] != null) salesData[idx][k] = entry[k];
+          });
+        } else {
+          salesData.push(entry);
+        }
+        imported++;
+      });
+      salesData.sort(function(a,b){ return a.date.localeCompare(b.date); });
+      salSave();
+      if(salCurTab === 'list') salRenderTable();
+      if(salCurTab === 'monthly') salRenderMonthly();
+      salLog('ok', imported + '日分をインポート（スキップ ' + skipped + '行）← ' + file.name);
+    } catch(err){
+      salLog('err', file.name + ' 解析エラー: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
 
 function salExportCSV(){
   if(!salesData.length){ showToast('データがありません'); return; }
