@@ -6889,6 +6889,29 @@ function wrSwitchTab(tab){
   requestAnimationFrame(wrDrawAllCharts);
 }
 
+function wrUpdateTotals(){
+  var d = wrEnsure();
+  function setEl(id, text){ var e=document.getElementById(id); if(e) e.textContent=text; }
+  function sumField(cat, sub, keys){
+    var t=0; keys.forEach(function(v){ t+=parseFloat(d[cat][sub][v.key])||0; }); return t;
+  }
+  // レタス 出荷・廃棄
+  var ls = sumField('lettuce','ship', WR_LETS);
+  var lw = sumField('lettuce','waste',WR_LETS);
+  setEl('wrTotalLS', ls.toFixed(1));
+  setEl('wrTotalLW', lw.toFixed(1));
+  // レタス 播種
+  var lsd = sumField('lettuce','seed', WR_LETS);
+  setEl('wrTotalLSd', Math.round(lsd)+' 株');
+  // トマト 出荷・収穫・廃棄
+  var ts = sumField('tomato','ship',   WR_TOMS);
+  var th = sumField('tomato','harvest',WR_TOMS);
+  var tw = sumField('tomato','waste',  WR_TOMS);
+  setEl('wrTotalTS', ts.toFixed(1));
+  setEl('wrTotalTH', th.toFixed(1));
+  setEl('wrTotalTW', tw.toFixed(1));
+}
+
 function wrBind(id, path){
   var el = document.getElementById(id);
   if(!el) return;
@@ -6898,6 +6921,7 @@ function wrBind(id, path){
     var obj = d;
     for(var i=0;i<keys.length-1;i++) obj=obj[keys[i]];
     obj[keys[keys.length-1]] = el.value;
+    wrUpdateTotals();
     _wrDebounce();
   };
 }
@@ -7304,7 +7328,7 @@ function wrRender(){
     return '<table class="wr-table">'+
       '<thead><tr><th>品種</th><th>出荷量(c/s)</th><th>廃棄量(c/s)</th></tr></thead>'+
       '<tbody>'+rows+
-      '<tr class="wr-total-row"><td>合計</td><td>'+sT.toFixed(1)+'</td><td>'+wT.toFixed(1)+'</td></tr>'+
+      '<tr class="wr-total-row"><td>合計</td><td id="wrTotalLS">'+sT.toFixed(1)+'</td><td id="wrTotalLW">'+wT.toFixed(1)+'</td></tr>'+
       '</tbody></table>';
   }
 
@@ -7319,7 +7343,7 @@ function wrRender(){
     return '<table class="wr-table">'+
       '<thead><tr><th>品種</th><th>播種量（株）</th></tr></thead>'+
       '<tbody>'+rows+
-      '<tr class="wr-total-row"><td>合計</td><td>'+Math.round(sT)+' 株</td></tr>'+
+      '<tr class="wr-total-row"><td>合計</td><td id="wrTotalLSd">'+Math.round(sT)+' 株</td></tr>'+
       '</tbody></table>';
   }
 
@@ -7373,7 +7397,7 @@ function wrRender(){
     return '<table class="wr-table">'+
       '<thead><tr><th>品種</th><th>出荷量(kg)</th><th>収穫量(kg)</th><th>廃棄量(kg)</th></tr></thead>'+
       '<tbody>'+rows+
-      '<tr class="wr-total-row"><td>合計</td><td>'+sT.toFixed(1)+'</td><td>'+hT.toFixed(1)+'</td><td>'+wT.toFixed(1)+'</td></tr>'+
+      '<tr class="wr-total-row"><td>合計</td><td id="wrTotalTS">'+sT.toFixed(1)+'</td><td id="wrTotalTH">'+hT.toFixed(1)+'</td><td id="wrTotalTW">'+wT.toFixed(1)+'</td></tr>'+
       '</tbody></table>';
   }
 
