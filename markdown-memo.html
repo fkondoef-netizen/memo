@@ -65,6 +65,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <!-- PptxGenJS (週報 PowerPoint エクスポート) -->
   <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+  <!-- Chart.js (農業比較グラフ) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <style>
     :root{
       --bg:#f0f2f5;--surface:#fff;--surface2:#f1f3f5;--border:#dee2e6;
@@ -668,20 +670,22 @@
     .cal-popup.open{display:block;}
     .cal-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
     .cal-hd-title{font-size:13px;font-weight:700;color:var(--text);}
-    .cal-nav{background:none;border:none;cursor:pointer;font-size:13px;
+    /* 日付ピッカー内の.cal-navボタン専用スタイル（カレンダーモードの.cal-navとは別） */
+    .cal-popup .cal-nav{background:none;border:none;cursor:pointer;font-size:13px;
       color:var(--text-m);padding:3px 8px;border-radius:5px;transition:background .15s;}
-    .cal-nav:hover{background:var(--surface2);}
+    .cal-popup .cal-nav:hover{background:var(--surface2);}
     .cal-week-hd{display:grid;grid-template-columns:repeat(7,1fr);
       text-align:center;font-size:10px;font-weight:700;color:var(--text-m);margin-bottom:3px;}
     .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;}
-    .cal-day{text-align:center;font-size:12px;padding:5px 0;border-radius:5px;
-      cursor:pointer;color:var(--text);border:none;background:none;transition:background .1s;}
-    .cal-day:hover:not(:disabled){background:var(--surface2);}
-    .cal-day.today{background:var(--primary);color:#fff;font-weight:700;}
-    .cal-day.today:hover{background:var(--primary-d);}
-    .cal-day.other-m{color:var(--text-m);opacity:.4;}
-    .cal-day.cal-sun{color:#e03131;}.cal-day.cal-sat{color:#1971c2;}
-    .cal-day.today.cal-sun,.cal-day.today.cal-sat{color:#fff;}
+    /* 日付ピッカー内の.cal-dayスタイル */
+    .cal-popup .cal-day{text-align:center;font-size:12px;padding:5px 0;border-radius:5px;
+      cursor:pointer;color:var(--text);border:none;background:none;transition:background .1s;min-height:auto;}
+    .cal-popup .cal-day:hover:not(:disabled){background:var(--surface2);}
+    .cal-popup .cal-day.today{background:var(--primary);color:#fff;font-weight:700;}
+    .cal-popup .cal-day.today:hover{background:var(--primary-d);}
+    .cal-popup .cal-day.other-m{color:var(--text-m);opacity:.4;}
+    .cal-popup .cal-day.cal-sun{color:#e03131;}.cal-popup .cal-day.cal-sat{color:#1971c2;}
+    .cal-popup .cal-day.today.cal-sun,.cal-popup .cal-day.today.cal-sat{color:#fff;}
     .cal-footer{margin-top:9px;padding-top:7px;border-top:1px solid var(--border);
       font-size:10px;color:var(--text-m);text-align:center;}
 
@@ -703,11 +707,11 @@
       white-space:nowrap;transition:all .15s;display:flex;align-items:center;gap:3px;}
     .mode-btn:hover{background:var(--surface2);color:var(--text);}
     .mode-btn.active{background:var(--primary);color:#fff;}
-    .mode-panel{display:none;flex:1;overflow:hidden;background:var(--surface);}
-    .mode-panel.active{display:flex;}
+    .mode-panel{display:none;flex:1;overflow:hidden;background:var(--surface);min-height:0;}
+    .mode-panel.active{display:flex;flex-direction:column;width:100%;}
 
     /* ── Mind Map ── */
-    .mm-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+    .mm-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
     .mm-toolbar{padding:6px 10px;background:var(--surface2);border-bottom:1px solid var(--border);
       display:flex;gap:6px;align-items:center;flex-shrink:0;}
     .mm-svg{flex:1;background:var(--surface);cursor:grab;user-select:none;}
@@ -726,7 +730,7 @@
       color:var(--text);min-width:100px;}
 
     /* ── Flowchart ── */
-    .fc-wrap{flex:1;display:flex;overflow:hidden;}
+    .fc-wrap{flex:1;display:flex;overflow:hidden;min-height:0;}
     .fc-palette{width:90px;background:var(--surface2);border-right:1px solid var(--border);
       padding:8px 6px;display:flex;flex-direction:column;gap:6px;flex-shrink:0;overflow-y:auto;}
     .fc-palette-lbl{font-size:9px;font-weight:700;color:var(--text-m);text-transform:uppercase;
@@ -749,7 +753,7 @@
     .fc-edge.selected{stroke:var(--primary);stroke-width:2.5;}
 
     /* ── Whiteboard ── */
-    .wb-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+    .wb-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
     .wb-toolbar{padding:6px 10px;background:var(--surface2);border-bottom:1px solid var(--border);
       display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap;}
     .wb-tool-btn{padding:4px 9px;font-size:12px;border:1px solid var(--border);border-radius:6px;
@@ -764,13 +768,13 @@
     #wbCanvas{display:block;width:100%;height:100%;cursor:crosshair;touch-action:none;}
 
     /* ══ Agricultural Data Mode ══ */
-    .ag-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--surface);}
+    .ag-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--surface);min-height:0;}
     .ag-tabs{display:flex;background:var(--surface2);border-bottom:1px solid var(--border);flex-shrink:0;}
     .ag-tab{padding:8px 16px;font-size:12px;font-weight:600;border:none;background:none;
       cursor:pointer;color:var(--text-m);border-bottom:3px solid transparent;transition:all .15s;}
     .ag-tab.active{color:var(--primary);border-color:var(--primary);}
-    .ag-pane{display:none;flex:1;overflow:hidden;flex-direction:column;}
-    .ag-pane.active{display:flex;}
+    .ag-pane{display:none;flex:1;overflow:hidden;flex-direction:column;min-height:0;}
+    .ag-pane.active{display:flex;width:100%;}
 
     /* Form */
     .ag-form-wrap{flex:1;overflow-y:auto;padding:16px;}
@@ -889,8 +893,8 @@
       cursor:pointer;background:none;color:var(--text);line-height:1.4;}
     .ag-cmp-wk-sel,.ag-cmp-field-sel{font-size:11px;padding:3px 6px;border:1px solid var(--border);
       border-radius:6px;background:var(--surface2);color:var(--text);}
-    .ag-cmp-canvas-wrap{position:relative;height:300px;flex-shrink:0;min-height:200px;}
-    #agCmpCanvas{display:block;width:100%;height:300px;border-radius:8px;background:var(--surface2);}
+    .ag-cmp-canvas-wrap{position:relative;height:320px;flex-shrink:0;min-height:200px;border-radius:8px;background:var(--surface2);padding:8px;}
+    #agCmpCanvas{display:block;width:100%;height:100%;}
     .ag-cmp-table-wrap{max-height:160px;overflow-y:auto;flex-shrink:0;border-top:1px solid var(--border);padding-top:4px;}
     .ag-cmp-periods{display:flex;flex-direction:column;gap:4px;}
     .ag-cmp-period-row{display:flex;gap:6px;align-items:center;padding:3px 8px;border-radius:6px;background:var(--surface2);font-size:10px;}
@@ -968,8 +972,8 @@
     }
 
     /* ── Calendar view ── */
-    .cal-view { display:flex;flex-direction:column;height:100%;overflow:hidden; }
-    .cal-nav { display:flex;align-items:center;gap:10px;padding:10px 16px;
+    .cal-view { display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden; }
+    .cal-nav { display:flex;align-items:center;gap:10px;padding:10px 16px;flex-shrink:0;
       background:var(--surface2);border-bottom:1px solid var(--border); }
     .cal-nav h3 { flex:1;font-size:14px;margin:0; }
     .cal-nav button { background:none;border:1px solid var(--border);border-radius:6px;
@@ -1020,7 +1024,8 @@
     .gcal-modal { background:var(--surface);border-radius:var(--r);padding:20px;
       width:380px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3); }
     .gcal-modal h3 { font-size:14px;margin-bottom:14px; }
-    .cal-nav-extra { display:flex;align-items:center;gap:6px;margin-left:auto; }
+    .cal-nav-extra { display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap; }
+    .cal-ics-count { font-size:10px;color:#34a853;font-weight:600; }
 
     /* ── Keyboard shortcuts modal ── */
     .sc-modal { background:var(--surface);border-radius:var(--r);padding:20px;
@@ -1090,7 +1095,7 @@
     .ag-import-err { color:#e03131; }
 
     /* ══ Slide Editor ══ */
-    .sl-wrap{display:flex;flex:1;overflow:hidden;background:var(--bg);}
+    .sl-wrap{display:flex;flex:1;overflow:hidden;background:var(--bg);min-height:0;}
     .sl-sidebar{width:190px;background:var(--surface2);border-right:1px solid var(--border);
       display:flex;flex-direction:column;flex-shrink:0;}
     .sl-sidebar-hd{padding:8px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:5px;}
@@ -1879,6 +1884,8 @@
             <div class="cal-nav-extra">
               <button onclick="openGoogleCalendar()" class="btn btn-s" style="font-size:11px;padding:4px 8px;" title="Googleカレンダーアプリを開く">📅 Googleカレンダー</button>
               <button onclick="openGoogleCalendarAddEvent()" class="btn btn-g" style="font-size:11px;padding:4px 8px;" title="Googleカレンダーで予定を追加">＋ 予定追加</button>
+              <button onclick="importICSFile()" class="btn btn-g" style="font-size:11px;padding:4px 8px;" title="GoogleカレンダーのICSファイルをインポート">📥 ICS取込</button>
+              <span id="icsEventCount" class="cal-ics-count" onclick="if(icsEvents.length)clearICSEvents()" style="cursor:pointer;" title="クリックで削除"></span>
             </div>
           </div>
           <div class="cal-grid-wrap">
@@ -2297,6 +2304,67 @@ let isDark    = localStorage.getItem('md_theme') === 'dark';
 let mathMode  = localStorage.getItem('md_math') !== 'off';
 let dirHandle = null;
 let fmtH      = new Map(); // noteId → {md,docx,pdf,savedTitle,savedCat}
+
+// ══════════════ IndexedDB 画像ストア ══════════════
+var _imgDB = null;
+var imgCache = {}; // uuid → dataUrl (インメモリキャッシュ)
+
+function openImgDB(){
+  return new Promise(function(resolve,reject){
+    if(_imgDB){resolve(_imgDB);return;}
+    var req=indexedDB.open('mdMemoImgDB',1);
+    req.onupgradeneeded=function(e){e.target.result.createObjectStore('images');};
+    req.onsuccess=function(e){_imgDB=e.target.result;resolve(_imgDB);};
+    req.onerror=function(e){reject(e);};
+  });
+}
+function saveImgToDB(uuid,dataUrl){
+  return openImgDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var tx=db.transaction('images','readwrite');
+      tx.objectStore('images').put(dataUrl,uuid);
+      tx.oncomplete=function(){imgCache[uuid]=dataUrl;resolve();};
+      tx.onerror=reject;
+    });
+  });
+}
+function loadImgFromDB(uuid){
+  if(imgCache[uuid]) return Promise.resolve(imgCache[uuid]);
+  return openImgDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var req=db.transaction('images').objectStore('images').get(uuid);
+      req.onsuccess=function(){if(req.result)imgCache[uuid]=req.result;resolve(req.result||null);};
+      req.onerror=reject;
+    });
+  });
+}
+function preloadNoteImgs(markdown){
+  var seen={},uuids=[],re=/img:\/\/([a-zA-Z0-9_\-]+)/g,m;
+  while((m=re.exec(markdown))!==null){
+    if(!imgCache[m[1]]&&!seen[m[1]]){seen[m[1]]=true;uuids.push(m[1]);}
+  }
+  if(!uuids.length)return Promise.resolve();
+  return Promise.all(uuids.map(loadImgFromDB));
+}
+// 画像を圧縮してIndexedDBに保存し、コールバックでimg://UUIDを返す
+function compressAndSaveImg(file,cb){
+  var maxW=1200,quality=0.82;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    var img=new Image();
+    img.onload=function(){
+      var w=img.width,h=img.height;
+      if(w>maxW){h=Math.round(h*maxW/w);w=maxW;}
+      var c=document.createElement('canvas');c.width=w;c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      var dataUrl=c.toDataURL('image/jpeg',quality);
+      var uuid='img-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);
+      saveImgToDB(uuid,dataUrl).then(function(){cb('img://'+uuid);});
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
 
 // ══════════════ Templates ══════════════
 var TPL_KEY = 'md_templates_v1';
@@ -3146,12 +3214,55 @@ function parseMd(md, withMath){
   h=h.replace(/^#{2} (.+)$/gm,'<h2>$1</h2>');h=h.replace(/^# (.+)$/gm,'<h1 id="$1">$1</h1>');
   h=h.replace(/^---+$/gm,'<hr>');
   h=h.replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>');
-  // checkboxes with index for toggle
+  // checkboxes / lists with index for toggle (supports nested indented lists)
   let cbIdx=0;
-  h=h.replace(/^- \[x\] (.+)$/gim,(_,t)=>`<li><input type="checkbox" checked data-cb="${cbIdx++}" onchange="pvToggleCb(this)"> ${t}</li>`);
-  h=h.replace(/^- \[ \] (.+)$/gm,(_,t)=>`<li><input type="checkbox" data-cb="${cbIdx++}" onchange="pvToggleCb(this)"> ${t}</li>`);
-  h=h.replace(/(^- .+\n?)+/gm,m=>`<ul>${m.trim().split('\n').map(l=>l.startsWith('<li>')?l:`<li>${l.replace(/^- /,'')}</li>`).join('')}</ul>`);
-  h=h.replace(/(^\d+\. .+\n?)+/gm,m=>`<ol>${m.trim().split('\n').map(l=>`<li>${l.replace(/^\d+\. /,'')}</li>`).join('')}</ol>`);
+  h=(function(){
+    var lineArr=h.split('\n'),out=[],i=0;
+    function parseBlock(block){
+      var items=[];
+      for(var k=0;k<block.length;k++){
+        var ln=block[k],m;
+        m=ln.match(/^( *)([-*+]) \[x\] (.+)$/i);
+        if(m){items.push({ind:m[1].length,type:'ul',content:'<input type="checkbox" checked data-cb="'+cbIdx+'" onchange="pvToggleCb(this)"> '+m[3]});cbIdx++;continue;}
+        m=ln.match(/^( *)([-*+]) \[ \] (.+)$/);
+        if(m){items.push({ind:m[1].length,type:'ul',content:'<input type="checkbox" data-cb="'+cbIdx+'" onchange="pvToggleCb(this)"> '+m[3]});cbIdx++;continue;}
+        m=ln.match(/^( *)([-*+]) (.+)/);
+        if(m){items.push({ind:m[1].length,type:'ul',content:m[3]});continue;}
+        m=ln.match(/^( *)(\d+)\. (.+)/);
+        if(m){items.push({ind:m[1].length,type:'ol',content:m[3]});continue;}
+      }
+      if(!items.length) return block.join('\n');
+      function buildLv(arr,base){
+        var j=0,tag=null,lis=[];
+        while(j<arr.length){
+          var it=arr[j];
+          if(it.ind<base){break;}
+          if(it.ind>base){j++;continue;}
+          if(!tag) tag=it.type;
+          var kids=[];
+          j++;
+          while(j<arr.length&&arr[j].ind>base){kids.push(arr[j]);j++;}
+          var cnt=it.content;
+          if(kids.length){var km=kids.reduce(function(a,x){return Math.min(a,x.ind);},Infinity);cnt+=buildLv(kids,km);}
+          lis.push('<li>'+cnt+'</li>');
+        }
+        if(!lis.length) return '';
+        var t=tag||'ul';
+        return '<'+t+'>'+lis.join('')+'</'+t+'>';
+      }
+      var minInd=items.reduce(function(a,x){return Math.min(a,x.ind);},Infinity);
+      return buildLv(items,minInd);
+    }
+    while(i<lineArr.length){
+      var ln=lineArr[i];
+      if(/^[ \t]*(?:[-*+]|\d+\.) /.test(ln)){
+        var block=[];
+        while(i<lineArr.length&&/^[ \t]*(?:[-*+]|\d+\.) /.test(lineArr[i])){block.push(lineArr[i]);i++;}
+        out.push(parseBlock(block));
+      } else {out.push(ln);i++;}
+    }
+    return out.join('\n');
+  })();
   h=h.replace(/^\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)+)/gm,(_,hd,rows)=>{
     const th=hd.split('|').filter(c=>c.trim()).map(c=>`<th>${c.trim()}</th>`).join('');
     const trs=rows.trim().split('\n').map(r=>`<tr>${r.split('|').filter(c=>c.trim()).map(c=>`<td>${c.trim()}</td>`).join('')}</tr>`).join('');
@@ -3161,6 +3272,10 @@ function parseMd(md, withMath){
   h=h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
   h=h.replace(/\*(.+?)\*/g,'<em>$1</em>');
   h=h.replace(/~~(.+?)~~/g,'<s>$1</s>');
+  h=h.replace(/!\[([^\]]*)\]\((img:\/\/([a-zA-Z0-9_\-]+))\)/g,function(_,alt,ref,uuid){
+    var src=imgCache[uuid]||'';
+    return '<img src="'+src+'" alt="'+alt+'"'+(src?'':' style="display:none"')+'>';
+  });
   h=h.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,'<img src="$2" alt="$1">');
   h=h.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>');
   // @date リマインダー記法
@@ -3199,17 +3314,21 @@ function parseMd(md, withMath){
 }
 
 function updatePreview(){
-  const pv=document.getElementById('pvContent');
-  pv.innerHTML=parseMd(document.getElementById('editor').value);
-  // Syntax highlighting
-  if(window.hljs) pv.querySelectorAll('pre code').forEach(b=>hljs.highlightElement(b));
-  // Mermaid
-  if(window.mermaid){
-    try{ mermaid.run({nodes:pv.querySelectorAll('.mermaid')}); }catch(e){}
-  }
+  var ed=document.getElementById('editor');
+  if(!ed) return;
+  var md=ed.value;
+  preloadNoteImgs(md).then(function(){
+    var pv=document.getElementById('pvContent');
+    if(!pv) return;
+    pv.innerHTML=parseMd(md);
+    if(window.hljs) pv.querySelectorAll('pre code').forEach(function(b){hljs.highlightElement(b);});
+    if(window.mermaid){try{mermaid.run({nodes:pv.querySelectorAll('.mermaid')});}catch(e){}}
+  });
 }
 function updateStatus(){
-  const t=document.getElementById('editor').value;
+  const el=document.getElementById('editor');
+  if(!el) return;
+  const t=el.value;
   document.getElementById('sW').textContent='文字数: '+t.length;
   document.getElementById('sL').textContent='行数: '+t.split('\n').length;
 }
@@ -3218,7 +3337,7 @@ function updateStatus(){
 function pvToggleCb(cb){
   const n=notes.find(x=>x.id===curId); if(!n) return;
   const idx=parseInt(cb.dataset.cb); let cnt=0;
-  n.content=n.content.replace(/^(- )\[[ x]\] /gim,m=>{ if(cnt++===idx) return (m.slice(0,2))+(cb.checked?'[x] ':'[ ] '); return m; });
+  n.content=n.content.replace(/^([ \t]*[-*+] )\[[ x]\] /gim,(_,prefix)=>{ if(cnt++===idx) return prefix+(cb.checked?'[x] ':'[ ] '); return _; });
   document.getElementById('editor').value=n.content;
   syncNote();
 }
@@ -3597,6 +3716,7 @@ function createBackupZip(){
     mmData: mmData,
     fcData: fcData,
     kbBoards: kbBoards,
+    icsEvents: icsEvents,
     wbDrawing: null,
     metadata: {
       exportDate: new Date().toISOString(),
@@ -3646,12 +3766,13 @@ function restoreFromBackup(){
         mmData=data.mmData||{nodes:[{id:0,x:0,y:0,text:'Root',parentId:null,level:0}],nextId:1};
         fcData=data.fcData||{nodes:[],edges:[],nextId:1};
         kbBoards=data.kbBoards||[];
-        
+        if(data.icsEvents){ icsEvents=data.icsEvents; saveICSEvents(); }
+
         saveNote();
         agSave();
         mmSaveData();
         fcSaveData();
-        kbSaveData();
+        if(typeof kbSaveData === 'function') kbSaveData();
         
         location.reload();
         showToast('✅ バックアップから復元しました');
@@ -4397,15 +4518,14 @@ function initDropZone(){
     const imgs=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/'));
     if(!imgs.length) return;
     e.preventDefault();
-    imgs.forEach(file=>{
-      const reader=new FileReader();
-      reader.onload=ev=>{
-        const name=file.name.replace(/[^\w.\-]/g,'_')||'image';
-        insertAtCursor(ed,`\n![${name}](${ev.target.result})\n`);
+    imgs.forEach(function(file){
+      var name=file.name.replace(/[^\w.\-]/g,'_')||'image';
+      compressAndSaveImg(file,function(ref){
+        insertAtCursor(ed,'\n!['+name+']('+ref+')\n');
+        updatePreview();
         showToast('🖼 画像を挿入しました');
         syncNote();
-      };
-      reader.readAsDataURL(file);
+      });
     });
   });
 
@@ -4414,15 +4534,14 @@ function initDropZone(){
     const items=Array.from(e.clipboardData?.items||[]).filter(i=>i.type.startsWith('image/'));
     if(!items.length) return;
     e.preventDefault();
-    items.forEach(item=>{
-      const file=item.getAsFile(); if(!file) return;
-      const reader=new FileReader();
-      reader.onload=ev=>{
-        insertAtCursor(ed,`\n![貼り付け画像](${ev.target.result})\n`);
+    items.forEach(function(item){
+      var file=item.getAsFile(); if(!file) return;
+      compressAndSaveImg(file,function(ref){
+        insertAtCursor(ed,'\n![貼り付け画像]('+ref+')\n');
+        updatePreview();
         showToast('🖼 画像を貼り付けました');
         syncNote();
-      };
-      reader.readAsDataURL(file);
+      });
     });
   });
 }
@@ -4443,24 +4562,19 @@ function insertPhotoFromFile(){
     document.body.removeChild(input);
     if(!files.length) return;
     files.forEach(function(file){
-      var reader=new FileReader();
-      reader.onload=function(ev){
-        var name=file.name.replace(/[^\w.\-]/g,'_')||'image';
-        insertAtCursor(ed,'\n!['+name+']('+ev.target.result+')\n');
+      var name=file.name.replace(/[^\w.\-]/g,'_')||'image';
+      compressAndSaveImg(file,function(ref){
+        insertAtCursor(ed,'\n!['+name+']('+ref+')\n');
         // プレビューが非表示なら分割表示に切り替えて画像を確認できるようにする
         var panes=document.getElementById('panes');
-        if(panes && panes.className==='panes view-edit'){
-          setView('both');
-        }
-        // プレビューを更新してスクロール
+        if(panes && panes.className==='panes view-edit'){setView('both');}
+        // プレビューを更新してスクロール（画像ロード後）
         updatePreview();
-        // プレビューペインの最下部へスクロール（挿入した画像が見えるように）
         var pvEl=document.getElementById('preview');
-        if(pvEl) setTimeout(function(){ pvEl.scrollTop=pvEl.scrollHeight; },50);
+        if(pvEl) setTimeout(function(){ pvEl.scrollTop=pvEl.scrollHeight; },150);
         showToast('🖼 画像を挿入しました（プレビューで確認）');
         syncNote();
-      };
-      reader.readAsDataURL(file);
+      });
     });
   };
   input.click();
@@ -5304,6 +5418,13 @@ function switchMode(mode){
   document.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('active', b.dataset.mode===mode));
   // Show/hide panes
   document.getElementById('panes').style.display = (mode==='md') ? 'flex' : 'none';
+  // Hide editor toolbars in non-md modes so mode panels get full height
+  var isMd = (mode==='md');
+  var editorToolbarDisplay = isMd ? '' : 'none';
+  ['.tb1','.tb2','.font-slider-wrap'].forEach(function(sel){
+    var el=document.querySelector(sel);
+    if(el) el.style.display = editorToolbarDisplay;
+  });
   // Show/hide mode panels
   document.querySelectorAll('.mode-panel').forEach(p=>p.classList.remove('active'));
   if(mode!=='md'){
@@ -5588,6 +5709,7 @@ function fcNodeBoundaryPt(fromX, fromY, toNode){
 
 // ══════════════════════════════════════════════════════
 let fcData = { nodes:[], edges:[], nextId:1 };
+var kbBoards = [];  // カンバンボード（未実装機能のプレースホルダー）
 let fcSelected = null;
 let fcDragging = null;
 let fcDragOffset = {x:0,y:0};
@@ -6030,7 +6152,8 @@ let salChartDays=30;
 function salLoad(){
   try{
     const d=localStorage.getItem('md_salesdata_v1');
-    salesData=d?JSON.parse(d):[];
+    const parsed=d?JSON.parse(d):[];
+    salesData=Array.isArray(parsed)?parsed:[];
   }catch(e){
     console.error('Sales load error:',e);
     salesData=[];
@@ -6038,7 +6161,12 @@ function salLoad(){
 }
 
 function salSave(){
-  localStorage.setItem('md_salesdata_v1',JSON.stringify(salesData));
+  try{
+    localStorage.setItem('md_salesdata_v1',JSON.stringify(salesData));
+  }catch(e){
+    showToast('❌ 保存エラー: ストレージ容量不足の可能性があります');
+    console.error('salSave error:',e);
+  }
   gdAutoBackup();
 }
 
@@ -6070,33 +6198,46 @@ function salUpdateDerived(){
   
   function fmt(v){return isNaN(v)?'—':v.toLocaleString();}
   
-  document.getElementById('salTomGP').textContent=fmt(tomGP)+'円';
-  document.getElementById('salLetGP').textContent=fmt(letGP)+'円';
-  document.getElementById('salTotalGP').textContent=fmt(totalGP)+'円';
+  var elTG=document.getElementById('salTomGP');
+  var elLG=document.getElementById('salLetGP');
+  var elTT=document.getElementById('salTotalGP');
+  if(elTG) elTG.textContent=fmt(tomGP)+'円';
+  if(elLG) elLG.textContent=fmt(letGP)+'円';
+  if(elTT) elTT.textContent=fmt(totalGP)+'円';
 }
 
 function salSaveEntry(){
-  const date=document.getElementById('salDate')?.value;
-  if(!date){ showToast('記録日を選択してください'); return; }
-  
-  const entry={
-    date,
-    tomHarv:parseFloat(document.getElementById('salTomHarv')?.value)||null,
-    tomSales:parseFloat(document.getElementById('salTomSales')?.value)||null,
-    tomLabor:parseFloat(document.getElementById('salTomLabor')?.value)||null,
-    tomOther:parseFloat(document.getElementById('salTomOther')?.value)||null,
-    letShip:parseFloat(document.getElementById('salLetShip')?.value)||null,
-    letSales:parseFloat(document.getElementById('salLetSales')?.value)||null,
-    letLabor:parseFloat(document.getElementById('salLetLabor')?.value)||null,
-    letOther:parseFloat(document.getElementById('salLetOther')?.value)||null
-  };
-  
-  const idx=salesData.findIndex(r=>r.date===date);
-  if(idx>=0){ salesData[idx]=entry; showToast('📝 記録を更新しました'); }
-  else { salesData.push(entry); salesData.sort((a,b)=>a.date.localeCompare(b.date)); showToast('✅ 記録しました'); }
-  
-  salSave();
-  salClearForm();
+  try {
+    const dateEl=document.getElementById('salDate');
+    // 日付が空の場合は今日の日付を自動設定
+    if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
+    const date=dateEl?.value;
+    if(!date){ showToast('記録日を選択してください'); return; }
+
+    const entry={
+      date,
+      tomHarv:parseFloat(document.getElementById('salTomHarv')?.value)||null,
+      tomSales:parseFloat(document.getElementById('salTomSales')?.value)||null,
+      tomLabor:parseFloat(document.getElementById('salTomLabor')?.value)||null,
+      tomOther:parseFloat(document.getElementById('salTomOther')?.value)||null,
+      letShip:parseFloat(document.getElementById('salLetShip')?.value)||null,
+      letSales:parseFloat(document.getElementById('salLetSales')?.value)||null,
+      letLabor:parseFloat(document.getElementById('salLetLabor')?.value)||null,
+      letOther:parseFloat(document.getElementById('salLetOther')?.value)||null
+    };
+
+    const idx=salesData.findIndex(r=>r.date===date);
+    if(idx>=0){ salesData[idx]=entry; showToast('📝 記録を更新しました', 3000); }
+    else { salesData.push(entry); salesData.sort((a,b)=>a.date.localeCompare(b.date)); showToast('✅ 記録しました', 3000); }
+
+    salSave();
+    salClearForm();
+    // 記録一覧タブに自動切替して保存結果を確認できるようにする
+    salSwitchTab('list');
+  } catch(e) {
+    console.error('salSaveEntry error:', e);
+    showToast('❌ 記録エラー: ' + e.message, 5000);
+  }
 }
 
 function salClearForm(){
@@ -6117,7 +6258,8 @@ function salDeleteEntry(date){
 
 function salRenderTable(){
   const tbody=document.getElementById('salTableBody');
-  if(!tbody||!salesData.length){ tbody.innerHTML='<tr><td colspan="13" style="text-align:center;padding:30px;color:var(--text-m);">まだ記録がありません</td></tr>'; return; }
+  if(!tbody) return;
+  if(!salesData.length){ tbody.innerHTML='<tr><td colspan="13" style="text-align:center;padding:30px;color:var(--text-m);">まだ記録がありません</td></tr>'; return; }
   
   tbody.innerHTML=salesData.slice().reverse().map(r=>{
     const tomGP=(r.tomSales||0)-(r.tomLabor||0)-(r.tomOther||0);
@@ -8301,10 +8443,22 @@ var calYear = new Date().getFullYear();
 var calMonth = new Date().getMonth();
 var calSelDay = null;
 
+// ICSイベントデータ
+var icsEvents = [];
+(function(){
+  try{ icsEvents=JSON.parse(localStorage.getItem('md_ics_events')||'[]'); }catch(e){ icsEvents=[]; }
+})();
+function saveICSEvents(){ localStorage.setItem('md_ics_events', JSON.stringify(icsEvents)); }
+function updateICSCount(){
+  var el=document.getElementById('icsEventCount');
+  if(el) el.textContent=icsEvents.length?'('+icsEvents.length+'件)':'';
+}
+
 function calInit(){
   calYear = new Date().getFullYear();
   calMonth = new Date().getMonth();
   calSelDay = null;
+  updateICSCount();
   calRender();
 }
 
@@ -8330,50 +8484,74 @@ function calRender(){
   var detailEl = document.getElementById('calDetail');
   if(!titleEl || !daysEl) return;
   titleEl.textContent = calYear + '年 ' + (calMonth + 1) + '月';
-  var today = new Date();
-  var firstDay = new Date(calYear, calMonth, 1).getDay();
-  var daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
-  var daysInPrev = new Date(calYear, calMonth, 0).getDate();
+  try {
+    var today = new Date();
+    var firstDay = new Date(calYear, calMonth, 1).getDay();
+    var daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    var daysInPrev = new Date(calYear, calMonth, 0).getDate();
 
-  // Group notes by date (YYYY-MM-DD)
-  var notesByDay = {};
-  notes.forEach(function(n){
-    var d = n.createdAt ? n.createdAt.slice(0,10) : null;
-    if(!d) return;
-    if(!notesByDay[d]) notesByDay[d] = [];
-    notesByDay[d].push(n);
-  });
-
-  var cells = '';
-  // Prev month padding
-  for(var p = firstDay - 1; p >= 0; p--){
-    var dayNum = daysInPrev - p;
-    var dateStr = calYear + '-' + String(calMonth === 0 ? 12 : calMonth).padStart(2,'0') + '-' + String(dayNum).padStart(2,'0');
-    cells += '<div class="cal-day other-month"><div class="cal-day-num">' + dayNum + '</div></div>';
-  }
-  // Current month
-  for(var d = 1; d <= daysInMonth; d++){
-    var dateStr2 = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
-    var isToday = (today.getFullYear()===calYear && today.getMonth()===calMonth && today.getDate()===d);
-    var dayNotes = notesByDay[dateStr2] || [];
-    var hasNotes = dayNotes.length > 0;
-    var chipsHtml = '';
-    dayNotes.slice(0,3).forEach(function(n){
-      chipsHtml += '<div class="cal-note-chip" style="background:' + (COLORS[n.category]||'var(--primary)') + '">' + (n.title||'無題') + '</div>';
+    // Group notes by date (YYYY-MM-DD) — safe forEach with type guard
+    var notesByDay = {};
+    (Array.isArray(notes) ? notes : []).forEach(function(n){
+      try {
+        var d = (n && typeof n.createdAt === 'string') ? n.createdAt.slice(0,10) : null;
+        if(!d) return;
+        if(!notesByDay[d]) notesByDay[d] = [];
+        notesByDay[d].push(n);
+      } catch(e2){ /* skip bad note */ }
     });
-    if(dayNotes.length > 3) chipsHtml += '<div class="cal-more">+' + (dayNotes.length-3) + '件</div>';
-    var cls = 'cal-day' + (isToday?' today':'') + (hasNotes?' has-notes':'') + (calSelDay===dateStr2?' sel':'');
-    cells += '<div class="' + cls + '" onclick="calSelectDay(\'' + dateStr2 + '\')">' +
-      '<div class="cal-day-num">' + d + '</div>' +
-      '<div class="cal-day-notes">' + chipsHtml + '</div>' +
-      '</div>';
+    // Group ICS events by date
+    var icsByDay = {};
+    (Array.isArray(icsEvents) ? icsEvents : []).forEach(function(ev){
+      try {
+        var d = ev && ev.start;
+        if(!d) return;
+        if(!icsByDay[d]) icsByDay[d] = [];
+        icsByDay[d].push(ev);
+      } catch(e2){ /* skip bad event */ }
+    });
+
+    var cells = '';
+    // Prev month padding
+    for(var p = firstDay - 1; p >= 0; p--){
+      var dayNum = daysInPrev - p;
+      cells += '<div class="cal-day other-month"><div class="cal-day-num">' + dayNum + '</div></div>';
+    }
+    // Current month
+    for(var d = 1; d <= daysInMonth; d++){
+      var dateStr2 = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+      var isToday = (today.getFullYear()===calYear && today.getMonth()===calMonth && today.getDate()===d);
+      var dayNotes = notesByDay[dateStr2] || [];
+      var dayICS = icsByDay[dateStr2] || [];
+      var hasNotes = dayNotes.length > 0 || dayICS.length > 0;
+      var chipsHtml = '';
+      // ICS events (Google Calendar) — green chips
+      dayICS.slice(0,2).forEach(function(ev){
+        var safe=(ev.summary||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        chipsHtml += '<div class="gcal-chip" title="'+safe+'">📅 '+safe+'</div>';
+      });
+      if(dayICS.length > 2) chipsHtml += '<div class="cal-more">+' + (dayICS.length-2) + '件</div>';
+      // メモチップ
+      dayNotes.slice(0,2).forEach(function(n){
+        chipsHtml += '<div class="cal-note-chip" style="background:' + ((COLORS&&COLORS[n.category])||'var(--primary)') + '">' + (n.title||'無題') + '</div>';
+      });
+      if(dayNotes.length > 2) chipsHtml += '<div class="cal-more">+' + (dayNotes.length-2) + '件</div>';
+      var cls = 'cal-day' + (isToday?' today':'') + (hasNotes?' has-notes':'') + (calSelDay===dateStr2?' sel':'');
+      cells += '<div class="' + cls + '" onclick="calSelectDay(\'' + dateStr2 + '\')">' +
+        '<div class="cal-day-num">' + d + '</div>' +
+        '<div class="cal-day-notes">' + chipsHtml + '</div>' +
+        '</div>';
+    }
+    // Next month padding
+    var remaining = (7 - (firstDay + daysInMonth) % 7) % 7;
+    for(var n2 = 1; n2 <= remaining; n2++){
+      cells += '<div class="cal-day other-month"><div class="cal-day-num">' + n2 + '</div></div>';
+    }
+    daysEl.innerHTML = cells;
+  } catch(e) {
+    console.error('calRender error:', e);
+    daysEl.innerHTML = '<div style="padding:20px;color:#e03131;font-size:13px;">カレンダー描画エラー: ' + e.message + '</div>';
   }
-  // Next month padding
-  var remaining = (7 - (firstDay + daysInMonth) % 7) % 7;
-  for(var n2 = 1; n2 <= remaining; n2++){
-    cells += '<div class="cal-day other-month"><div class="cal-day-num">' + n2 + '</div></div>';
-  }
-  daysEl.innerHTML = cells;
   if(calSelDay) calShowDetail(calSelDay);
   else if(detailEl) detailEl.style.display = 'none';
 }
@@ -8388,14 +8566,29 @@ function calShowDetail(dateStr){
   var detailEl = document.getElementById('calDetail');
   if(!detailEl) return;
   var dayNotes = notes.filter(function(n){ return n.createdAt && n.createdAt.slice(0,10) === dateStr; });
-  if(!dayNotes.length){ detailEl.style.display='none'; return; }
+  var dayICS = icsEvents.filter(function(ev){ return ev.start === dateStr; });
+  if(!dayNotes.length && !dayICS.length){ detailEl.style.display='none'; return; }
   detailEl.style.display = 'block';
-  var html = '<h4>' + dateStr + 'のメモ（' + dayNotes.length + '件）</h4>';
-  dayNotes.forEach(function(n){
-    html += '<div class="cal-detail-item" onclick="switchMode(\'md\');openNote(\'' + n.id + '\')">' +
-      '<span style="color:' + (COLORS[n.category]||'var(--primary)') + ';margin-right:4px;">' + (EMOJI[n.category]||'📝') + '</span>' +
-      (n.title || '無題') + '</div>';
-  });
+  var html = '<h4>' + dateStr + 'の予定・メモ</h4>';
+  // ICSイベント
+  if(dayICS.length){
+    html += '<div style="margin-bottom:6px;"><span style="font-size:10px;font-weight:700;color:#1a73e8;">📅 Googleカレンダー</span></div>';
+    dayICS.forEach(function(ev){
+      html += '<div class="gcal-event-item">' +
+        '<div class="gcal-event-info"><div class="gcal-event-title">' + escHtml(ev.summary) + '</div>' +
+        (ev.end && ev.end!==ev.start ? '<div class="gcal-event-time">〜 '+ev.end+'</div>' : '') +
+        '</div></div>';
+    });
+  }
+  // メモ
+  if(dayNotes.length){
+    html += '<div style="margin-top:6px;margin-bottom:4px;"><span style="font-size:10px;font-weight:700;color:var(--text-m);">📝 メモ（'+dayNotes.length+'件）</span></div>';
+    dayNotes.forEach(function(n){
+      html += '<div class="cal-detail-item" onclick="switchMode(\'md\');openNote(\'' + n.id + '\')">' +
+        '<span style="color:' + (COLORS[n.category]||'var(--primary)') + ';margin-right:4px;">' + (EMOJI[n.category]||'📝') + '</span>' +
+        (n.title || '無題') + '</div>';
+    });
+  }
   detailEl.innerHTML = html;
 }
 
@@ -8449,6 +8642,93 @@ function openGcalAddUrl(){
 
 function escHtml(s){
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ══════════════════════════════════════════════════════
+// ICS ファイルインポート（Googleカレンダー→ローカル表示）
+// ══════════════════════════════════════════════════════
+function importICSFile(){
+  var input=document.createElement('input');
+  input.type='file';
+  input.accept='.ics,text/calendar';
+  input.style.cssText='position:fixed;top:-100px;left:-100px;opacity:0;pointer-events:none;';
+  document.body.appendChild(input);
+  input.onchange=function(){
+    var file=input.files[0];
+    document.body.removeChild(input);
+    if(!file) return;
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var evts=parseICS(e.target.result);
+      if(!evts.length){showToast('イベントが見つかりませんでした');return;}
+      // 既存イベントとマージ（重複排除）
+      var existing=new Set(icsEvents.map(function(x){return x.start+'|'+x.summary;}));
+      var added=0;
+      evts.forEach(function(ev){
+        var key=ev.start+'|'+ev.summary;
+        if(!existing.has(key)){icsEvents.push(ev);existing.add(key);added++;}
+      });
+      saveICSEvents();
+      updateICSCount();
+      calRender();
+      showToast('📅 '+added+'件のイベントを取り込みました（計'+icsEvents.length+'件）');
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+function clearICSEvents(){
+  if(!confirm('取り込み済みのGoogleカレンダーイベント（'+icsEvents.length+'件）をすべて削除しますか？'))return;
+  icsEvents=[];
+  saveICSEvents();
+  updateICSCount();
+  calRender();
+  showToast('カレンダーイベントを削除しました');
+}
+
+function parseICS(text){
+  var events=[];
+  // 行折り返し(RFC 5545 folding)を展開
+  var lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  var unfolded=[];
+  lines.forEach(function(l){
+    if((l.startsWith(' ')||l.startsWith('\t'))&&unfolded.length){
+      unfolded[unfolded.length-1]+=l.slice(1);
+    } else {
+      unfolded.push(l);
+    }
+  });
+  var inEvent=false,evt={};
+  unfolded.forEach(function(l){
+    if(l==='BEGIN:VEVENT'){inEvent=true;evt={};}
+    else if(l==='END:VEVENT'){
+      inEvent=false;
+      if(evt.start&&evt.summary) events.push({summary:evt.summary,start:evt.start,end:evt.end||null});
+    } else if(inEvent){
+      var ci=l.indexOf(':');
+      if(ci<0) return;
+      var key=l.slice(0,ci),val=l.slice(ci+1);
+      if(key==='DTSTART'||key.indexOf('DTSTART;')===0){
+        evt.start=icsParseDate(val);
+      } else if(key==='DTEND'||key.indexOf('DTEND;')===0){
+        evt.end=icsParseDate(val);
+      } else if(key==='SUMMARY'){
+        evt.summary=val.replace(/\\,/g,',').replace(/\\n/g,' ').replace(/\\;/g,';').replace(/\\\\/g,'\\');
+      }
+    }
+  });
+  return events;
+}
+
+function icsParseDate(val){
+  // VALUE=DATE: 20260310 → '2026-03-10'
+  // DATETIME: 20260310T080000Z → '2026-03-10'
+  var digits=val.replace(/[^0-9]/g,'');
+  if(digits.length>=8){
+    return digits.slice(0,4)+'-'+digits.slice(4,6)+'-'+digits.slice(6,8);
+  }
+  return null;
 }
 
 // ══════════════ Ag Data Summary ══════════════
@@ -8605,7 +8885,7 @@ function agRenderSummary(){
 var agCmpMode    = 'week';
 var agCmpField   = 'tomTemp';
 var agCmpYearsVis = {};
-var agCmpWeekNum = 9;
+var agCmpWeekNum = 0; // 0=未初期化。agCmpInitで最新週に自動設定される
 var agCmpPeriods = [
   {start:'',end:'',label:'期間A'},
   {start:'',end:'',label:'期間B'},
@@ -8638,28 +8918,35 @@ function agCmpISOWeek(dateStr){
   return Math.floor((d-s)/604800000)+1;
 }
 function agCmpDOW(dateStr){ var w=new Date(dateStr+'T00:00:00').getDay(); return w===0?7:w; }
-function agCmpYears(){ var y={}; agRecords.forEach(function(r){y[r.date.slice(0,4)]=true;}); return Object.keys(y).sort(); }
-function agCmpWeeks(){ var w={}; agRecords.forEach(function(r){w[agCmpISOWeek(r.date)]=true;}); return Object.keys(w).map(Number).sort(function(a,b){return a-b;}); }
-function agCmpFieldLabel(){ var f=CMP_FIELDS.find(function(x){return x.id===agCmpField;}); return f?f.label:agCmpField; }
+function agCmpYears(){ if(!Array.isArray(agRecords)) return []; var y={}; agRecords.forEach(function(r){ if(r&&typeof r.date==='string') y[r.date.slice(0,4)]=true; }); return Object.keys(y).sort(); }
+function agCmpWeeks(){ if(!Array.isArray(agRecords)) return []; var w={}; agRecords.forEach(function(r){ if(r&&typeof r.date==='string') w[agCmpISOWeek(r.date)]=true; }); return Object.keys(w).map(Number).sort(function(a,b){return a-b;}); }
+function agCmpFieldLabel(){ var fields=Array.isArray(CMP_FIELDS)?CMP_FIELDS:[]; var f=fields.find(function(x){return x.id===agCmpField;}); return f?f.label:(agCmpField||''); }
 
 // キャンバスに実寸が出るまでリトライしてから描画
 function agCmpWaitAndDraw(retries){
-  var canvas=document.getElementById('agCmpCanvas');
-  if(!canvas) return;
-  var par=canvas.parentElement;
-  var w=par.offsetWidth||par.clientWidth||0;
+  var wrap=document.getElementById('agCmpCanvas');
+  if(!wrap) return;
+  var par=wrap.parentElement;
+  var w=par?par.offsetWidth||par.clientWidth||0:0;
   if(w>20){
     requestAnimationFrame(agCmpDraw);
   } else if((retries||0)<40){
     setTimeout(function(){ agCmpWaitAndDraw((retries||0)+1); },50);
+  } else {
+    // タイムアウト後も強制描画（レイアウト未確定でも描画を試みる）
+    requestAnimationFrame(agCmpDraw);
   }
 }
 
 function agCmpInit(){
+  agCmpDestroyChart();
   var years=agCmpYears();
   var prev=Object.assign({},agCmpYearsVis); agCmpYearsVis={};
   years.forEach(function(y){ agCmpYearsVis[y]=(prev[y]!==false); });
-  if(!agCmpWeekNum&&agRecords.length) agCmpWeekNum=agCmpISOWeek(agRecords[agRecords.length-1].date);
+  if(!agCmpWeekNum&&Array.isArray(agRecords)&&agRecords.length){
+    var lastRec=agRecords.filter(function(r){return r&&typeof r.date==='string';}).slice(-1)[0];
+    if(lastRec) agCmpWeekNum=agCmpISOWeek(lastRec.date);
+  }
   // Sync field selector
   var sel=document.getElementById('agCmpFieldSel');
   if(sel) sel.value=agCmpField;
@@ -8696,10 +8983,11 @@ function agCmpWeekNav(dir){
 }
 
 function agCmpBuildCtrl(){
+  var COLORS=Array.isArray(YEAR_COLORS)&&YEAR_COLORS.length?YEAR_COLORS:['#4c6ef5','#e03131','#2f9e44','#f08c00','#7048e8','#1098ad','#c2255c','#e67700'];
   var years=agCmpYears();
   var html='<div class="ag-cmp-row"><span class="ag-cmp-lbl">年:</span>';
   years.forEach(function(y,i){
-    var col=YEAR_COLORS[i%YEAR_COLORS.length];
+    var col=COLORS[i%COLORS.length];
     var off=agCmpYearsVis[y]?'':' off';
     html+='<button class="ag-cmp-yr'+off+'" data-yr="'+y+'" onclick="agCmpToggleYear(this.dataset.yr)"'+
       ' style="border-color:'+col+';color:'+col+'">'+
@@ -8719,346 +9007,296 @@ function agCmpBuildCtrl(){
   } else if(agCmpMode==='period'){
     html+='<div class="ag-cmp-periods">';
     agCmpPeriods.forEach(function(p,i){
-      var col=YEAR_COLORS[i%YEAR_COLORS.length];
+      var col=COLORS[i%COLORS.length];
       html+='<div class="ag-cmp-period-row" style="border-left:3px solid '+col+'">'+
-        '<span style="font-weight:700;color:'+col+';min-width:42px;font-size:10px;">'+
-        '<input type="text" value="'+p.label+'" data-pi="'+i+'" onchange="agCmpPeriods[parseInt(this.dataset.pi)].label=this.value;agCmpDraw()" style="font-weight:700;color:'+col+'"></span>'+
-        '<input type="date" value="'+p.start+'" data-pi="'+i+'" onchange="agCmpPeriods[parseInt(this.dataset.pi)].start=this.value;agCmpDraw()">'+
-        '<span>〜</span>'+
-        '<input type="date" value="'+p.end+'" data-pi="'+i+'" onchange="agCmpPeriods[parseInt(this.dataset.pi)].end=this.value;agCmpDraw()">'+
+        '<input type="text" value="'+p.label+'" data-pi="'+i+'" onchange="agCmpPeriods[parseInt(this.dataset.pi)].label=this.value;agCmpDraw()" style="font-weight:700;color:'+col+';width:52px;font-size:10px;border:1px solid var(--brd);border-radius:3px;padding:1px 3px;">'+
+        '<label style="font-size:10px;color:var(--text-m);margin-left:4px;">開始</label>'+
+        '<input type="date" value="'+p.start+'" data-pi="'+i+'" onchange="agCmpPeriods[parseInt(this.dataset.pi)].start=this.value;agCmpDraw()" style="font-size:11px;border:1px solid var(--brd);border-radius:3px;padding:1px 4px;">'+
+        '<label style="font-size:10px;color:var(--text-m);margin:0 2px;">〜</label>'+
+        '<input type="date" value="'+p.end+'" data-pi="'+i+'" onchange="agCmpPeriods[parseInt(this.dataset.pi)].end=this.value;agCmpDraw()" style="font-size:11px;border:1px solid var(--brd);border-radius:3px;padding:1px 4px;">'+
       '</div>';
     });
     html+='</div>';
   } else {
     html+='<div class="ag-cmp-row"><span style="font-size:10px;color:var(--text-m);">全ISO週番号を横軸に、年ごとの週次平均を比較します</span></div>';
   }
-  document.getElementById('agCmpCtrl').innerHTML=html;
+  var agCmpCtrlEl=document.getElementById('agCmpCtrl');
+  if(agCmpCtrlEl) agCmpCtrlEl.innerHTML=html;
 }
 
-// ── メイン描画 ──
+// ── 比較グラフ（Chart.js） ──
+var _agCmpChart = null; // Chart.js インスタンス
+
+function agCmpDestroyChart(){
+  if(_agCmpChart){ _agCmpChart.destroy(); _agCmpChart=null; }
+}
+
 function agCmpDraw(){
+  var tbl=document.getElementById('agCmpTable');
+  try {
+    if(!Array.isArray(agRecords)||!agRecords.length){
+      agCmpDestroyChart();
+      if(tbl) tbl.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-m)">📊 農業データがありません<br><small>「データ入力」タブからデータを登録してください</small></div>';
+      return;
+    }
+    var years=agCmpYears().filter(function(y){return agCmpYearsVis[y];});
+    if(!years.length){
+      agCmpYears().forEach(function(y){ agCmpYearsVis[y]=true; });
+      years=agCmpYears();
+      agCmpBuildCtrl();
+    }
+    if(agCmpMode==='week')        agCmpDrawWeekCJ(years);
+    else if(agCmpMode==='year')   agCmpDrawYearCJ(years);
+    else if(agCmpMode==='period') agCmpDrawPeriodCJ();
+  } catch(e) {
+    console.error('agCmpDraw error:', e);
+    if(tbl) tbl.innerHTML='<div style="text-align:center;padding:20px;color:#e03131;font-size:12px;">比較グラフエラー: '+e.message+'</div>';
+  }
+}
+
+function agCmpMakeChart(labels, datasets, titleText){
   var canvas=document.getElementById('agCmpCanvas'); if(!canvas) return;
-  var par=canvas.parentElement;
-  var pw=par.offsetWidth||par.clientWidth;
-  // 親がまだレイアウトされていない場合はリトライ
-  if(!pw || pw<20){ agCmpWaitAndDraw(); return; }
-  canvas.width=pw; canvas.height=300;
-  canvas.style.width='100%'; canvas.style.height='300px';
-  var ctx=canvas.getContext('2d');
+  if(!window.Chart){
+    canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
+    var ctx2=canvas.getContext('2d');
+    ctx2.fillStyle='#868e96';ctx2.font='13px sans-serif';ctx2.textAlign='center';
+    ctx2.fillText('Chart.js 読込中...', canvas.width/2||150, canvas.height/2||60);
+    return;
+  }
+  agCmpDestroyChart();
   var isDark=document.documentElement.getAttribute('data-theme')==='dark';
-  var TC=isDark?'#c1c2c5':'#495057';
-  var GC=isDark?'rgba(255,255,255,.07)':'rgba(0,0,0,.07)';
-  var BG=isDark?'#25262b':'#f8f9fa';
-  ctx.fillStyle=BG; ctx.fillRect(0,0,canvas.width,canvas.height);
-
-  var years=agCmpYears().filter(function(y){return agCmpYearsVis[y];});
-  if(!agRecords.length){
-    ctx.fillStyle=TC;ctx.font='13px sans-serif';ctx.textAlign='center';
-    ctx.fillText('データがありません',canvas.width/2,canvas.height/2);
-    document.getElementById('agCmpTable').innerHTML=''; return;
-  }
-  // 年フィルタが空の場合（未初期化・データ読込後に比較タブを開いた場合）は全年を表示
-  if(!years.length) {
-    agCmpYears().forEach(function(y){ agCmpYearsVis[y]=true; });
-    years=agCmpYears();
-    agCmpBuildCtrl();
-  }
-  if(agCmpMode==='week')   agCmpDrawWeek(ctx,canvas,years,TC,GC);
-  else if(agCmpMode==='year')   agCmpDrawYear(ctx,canvas,years,TC,GC);
-  else if(agCmpMode==='period') agCmpDrawPeriod(ctx,canvas,TC,GC);
-}
-
-// ── 共通グリッド描画ヘルパー ──
-function agCmpGrid(ctx,PAD,W,H,vMin,vMax,TC,GC){
-  ctx.strokeStyle=GC;ctx.lineWidth=1;
-  for(var i=0;i<=5;i++){var gy=PAD.t+i*(H/5);ctx.beginPath();ctx.moveTo(PAD.l,gy);ctx.lineTo(PAD.l+W,gy);ctx.stroke();}
-  ctx.fillStyle=TC;ctx.font='10px sans-serif';ctx.textAlign='right';
-  for(var i=0;i<=5;i++){ctx.fillText((vMax-(vMax-vMin)*i/5).toFixed(1),PAD.l-5,PAD.t+i*H/5+4);}
-  ctx.strokeStyle=TC;ctx.lineWidth=1.5;
-  ctx.beginPath();ctx.moveTo(PAD.l,PAD.t);ctx.lineTo(PAD.l,PAD.t+H);ctx.lineTo(PAD.l+W,PAD.t+H);ctx.stroke();
-}
-function agCmpRange(vals,pad){
-  if(!vals.length) return {min:0,max:10};
-  var mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals);
-  if(mn===mx){mn-=1;mx+=1;}
-  return {min:Math.floor(mn-(pad||1)),max:Math.ceil(mx+(pad||1))};
-}
-function agCmpNoData(ctx,canvas,TC,msg){
-  ctx.fillStyle=TC;ctx.font='13px sans-serif';ctx.textAlign='center';
-  ctx.fillText(msg||'データなし',canvas.width/2,canvas.height/2);
-  document.getElementById('agCmpTable').innerHTML='';
+  var gridColor=isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.08)';
+  var textColor=isDark?'#c1c2c5':'#495057';
+  _agCmpChart=new Chart(canvas,{
+    type:'line',
+    data:{labels:labels,datasets:datasets},
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      animation:{duration:300},
+      plugins:{
+        legend:{display:true,position:'top',labels:{color:textColor,font:{size:11},boxWidth:18,padding:10}},
+        title:{display:!!titleText,text:titleText||'',color:textColor,font:{size:12,weight:'bold'}},
+        tooltip:{mode:'index',intersect:false,callbacks:{
+          label:function(ctx){return ctx.dataset.label+': '+(ctx.parsed.y!=null?ctx.parsed.y.toFixed(1):'—');}
+        }}
+      },
+      scales:{
+        x:{ticks:{color:textColor,font:{size:10},maxRotation:0},grid:{color:gridColor}},
+        y:{ticks:{color:textColor,font:{size:10},callback:function(v){return (v!=null&&typeof v.toFixed==='function')?v.toFixed(1):v;}},grid:{color:gridColor}}
+      },
+      elements:{point:{radius:4,hoverRadius:6},line:{tension:0.2}}
+    }
+  });
 }
 
 // ── 週比較 ──
-function agCmpDrawWeek(ctx,canvas,years,TC,GC){
-  var PAD={l:52,r:28,t:28,b:38};
-  var W=canvas.width-PAD.l-PAD.r, H=canvas.height-PAD.t-PAD.b;
-
-  // データ収集: {year:{dow:value}}
-  var sd={};
-  years.forEach(function(y){
-    sd[y]={};
-    agRecords.forEach(function(r){
-      if(r.date.slice(0,4)!==y) return;
-      if(agCmpISOWeek(r.date)!==agCmpWeekNum) return;
-      var v=r[agCmpField]; if(v==null) return;
-      sd[y][agCmpDOW(r.date)]=v;
+function agCmpDrawWeekCJ(years){
+  var tbl=document.getElementById('agCmpTable');
+  try {
+    var COLORS=Array.isArray(YEAR_COLORS)&&YEAR_COLORS.length?YEAR_COLORS:['#4c6ef5','#e03131','#2f9e44','#f08c00','#7048e8','#1098ad','#c2255c','#e67700'];
+    var DOW=Array.isArray(DOW_LBL)?DOW_LBL:['','月','火','水','木','金','土','日'];
+    var records=Array.isArray(agRecords)?agRecords:[];
+    var sd={};
+    (Array.isArray(years)?years:[]).forEach(function(y){
+      sd[y]={};
+      records.forEach(function(r){
+        if(!r||typeof r.date!=='string') return;
+        if(r.date.slice(0,4)!==y) return;
+        if(agCmpISOWeek(r.date)!==agCmpWeekNum) return;
+        var v=r[agCmpField]; if(v==null) return;
+        sd[y][agCmpDOW(r.date)]=v;
+      });
     });
-  });
-
-  var allV=[];
-  years.forEach(function(y){Object.values(sd[y]).forEach(function(v){allV.push(v);});});
-  if(!allV.length){agCmpNoData(ctx,canvas,TC,'W'+String(agCmpWeekNum).padStart(2,'0')+' のデータなし');return;}
-
-  var R=agCmpRange(allV,1);
-  function tx(dow){return PAD.l+(dow-1)*(W/6);}
-  function ty(v){return PAD.t+H-(v-R.min)/(R.max-R.min)*H;}
-
-  agCmpGrid(ctx,PAD,W,H,R.min,R.max,TC,GC);
-
-  // X軸: 曜日
-  ctx.textAlign='center';ctx.fillStyle=TC;ctx.font='11px sans-serif';
-  for(var di=1;di<=7;di++){
-    ctx.fillStyle=TC;ctx.fillText(DOW_LBL[di],tx(di),PAD.t+H+16);
-    ctx.strokeStyle=GC;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(tx(di),PAD.t+H);ctx.lineTo(tx(di),PAD.t+H+4);ctx.stroke();
-  }
-  // タイトル
-  ctx.textAlign='center';ctx.font='bold 11px sans-serif';ctx.fillStyle=TC;
-  ctx.fillText('ISO W'+String(agCmpWeekNum).padStart(2,'0')+' — '+agCmpFieldLabel(), canvas.width/2, PAD.t-10);
-
-  // 系列描画
-  years.forEach(function(y,idx){
-    var col=YEAR_COLORS[idx%YEAR_COLORS.length];
-    var data=sd[y]; if(!Object.keys(data).length) return;
-    ctx.beginPath();ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.setLineDash([]);
-    var st=false;
-    for(var di=1;di<=7;di++){
-      if(data[di]==null) continue;
-      var x=tx(di),yy=ty(data[di]);
-      st?ctx.lineTo(x,yy):(ctx.moveTo(x,yy),st=true);
+    var allV=[];
+    (Array.isArray(years)?years:[]).forEach(function(y){Object.values(sd[y]||{}).forEach(function(v){allV.push(v);});});
+    if(!allV.length){
+      agCmpDestroyChart();
+      if(tbl) tbl.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-m)">W'+String(agCmpWeekNum).padStart(2,'0')+' のデータなし</div>';
+      return;
     }
-    ctx.stroke();
-    // ドット + 値ラベル
-    for(var di=1;di<=7;di++){
-      if(data[di]==null) continue;
-      var x=tx(di),yy=ty(data[di]);
-      ctx.fillStyle=col;ctx.beginPath();ctx.arc(x,yy,4.5,0,Math.PI*2);ctx.fill();
-      ctx.fillStyle=BG=document.documentElement.getAttribute('data-theme')==='dark'?'#25262b':'#f8f9fa';
-      ctx.beginPath();ctx.arc(x,yy,2,0,Math.PI*2);ctx.fill();
-      ctx.font='bold 9px sans-serif';ctx.textAlign='center';
-      var lbl=data[di].toFixed(1);
-      var tw=ctx.measureText(lbl).width;
-      var yOff = idx%2===0 ? -11 : 13;
-      if(yy-11<PAD.t) yOff=13;
-      if(yy+13>PAD.t+H) yOff=-11;
-      ctx.fillStyle=document.documentElement.getAttribute('data-theme')==='dark'?'#25262b':'#ffffff';
-      ctx.fillRect(x-tw/2-2,yy+yOff-9,tw+4,11);
-      ctx.fillStyle=col;
-      ctx.fillText(lbl,x,yy+yOff);
-    }
-    // 年ラベル (最終データ点の右)
-    var ld=null; for(var di=7;di>=1;di--){if(data[di]!=null){ld=di;break;}}
-    if(ld){ctx.fillStyle=col;ctx.font='bold 10px sans-serif';ctx.textAlign='left';ctx.fillText(y,tx(ld)+9,ty(data[ld])+4);}
-  });
-
-  // ─ 比較テーブル ─
-  var html='<table class="ag-tbl" style="font-size:10px;"><thead><tr><th>年</th>';
-  for(var di=1;di<=7;di++) html+='<th>'+DOW_LBL[di]+'</th>';
-  html+='<th>平均</th><th>最低</th><th>最高</th></tr></thead><tbody>';
-  var prev=null;
-  years.forEach(function(y,idx){
-    var col=YEAR_COLORS[idx%YEAR_COLORS.length];
-    var data=sd[y];
-    var vals=Object.values(data).filter(function(v){return v!=null;});
-    var avg=vals.length?vals.reduce(function(a,b){return a+b;},0)/vals.length:null;
-    html+='<tr><td style="font-weight:800;color:'+col+'">'+y+'</td>';
-    for(var di=1;di<=7;di++) html+='<td>'+(data[di]!=null?data[di].toFixed(1):'—')+'</td>';
-    html+='<td style="font-weight:700">'+(avg!=null?avg.toFixed(1):'—')+'</td>';
-    html+='<td>'+(vals.length?Math.min.apply(null,vals).toFixed(1):'—')+'</td>';
-    html+='<td>'+(vals.length?Math.max.apply(null,vals).toFixed(1):'—')+'</td></tr>';
-    // 差分行
-    if(prev){
-      html+='<tr style="font-size:9px;color:var(--text-m);"><td>Δ vs '+years[idx-1]+'</td>';
-      var deltas=[];
-      for(var di=1;di<=7;di++){
-        var a=prev[di],b=data[di];
-        if(a!=null&&b!=null){var d=b-a;deltas.push(d);var sg=d>=0?'+':'';html+='<td class="'+(d>0?'ag-cmp-delta-pos':d<0?'ag-cmp-delta-neg':'')+'">'+(sg)+d.toFixed(1)+'</td>';}
-        else html+='<td>—</td>';
+    var labels=DOW.slice(1); // 月〜日
+    var datasets=(Array.isArray(years)?years:[]).map(function(y,i){
+      return {
+        label:y,
+        data:DOW.slice(1).map(function(_,idx){var dow=idx+1;return sd[y]&&sd[y][dow]!=null?sd[y][dow]:null;}),
+        borderColor:COLORS[i%COLORS.length],
+        backgroundColor:COLORS[i%COLORS.length]+'30',
+        borderWidth:2.5,
+        spanGaps:false,
+        fill:false
+      };
+    });
+    agCmpMakeChart(labels,datasets,'ISO W'+String(agCmpWeekNum).padStart(2,'0')+' — '+agCmpFieldLabel());
+    // テーブル
+    var html='<table class="ag-tbl" style="font-size:10px;"><thead><tr><th>年</th>';
+    for(var di=1;di<=7;di++) html+='<th>'+DOW[di]+'</th>';
+    html+='<th>平均</th><th>最低</th><th>最高</th></tr></thead><tbody>';
+    var prev=null;
+    (Array.isArray(years)?years:[]).forEach(function(y,idx){
+      var col=COLORS[idx%COLORS.length];
+      var data=sd[y]||{};
+      var vals=Object.values(data).filter(function(v){return v!=null;});
+      var avg=vals.length?vals.reduce(function(a,b){return a+b;},0)/vals.length:null;
+      html+='<tr><td style="font-weight:800;color:'+col+'">'+y+'</td>';
+      for(var di=1;di<=7;di++) html+='<td>'+(data[di]!=null?data[di].toFixed(1):'—')+'</td>';
+      html+='<td style="font-weight:700">'+(avg!=null?avg.toFixed(1):'—')+'</td>';
+      html+='<td>'+(vals.length?Math.min.apply(null,vals).toFixed(1):'—')+'</td>';
+      html+='<td>'+(vals.length?Math.max.apply(null,vals).toFixed(1):'—')+'</td></tr>';
+      if(prev){
+        html+='<tr style="font-size:9px;color:var(--text-m);"><td>Δ vs '+(years[idx-1]||'')+'</td>';
+        var deltas=[];
+        for(var di=1;di<=7;di++){
+          var a=prev[di],b=data[di];
+          if(a!=null&&b!=null){var d=b-a;deltas.push(d);var sg=d>=0?'+':'';html+='<td class="'+(d>0?'ag-cmp-delta-pos':d<0?'ag-cmp-delta-neg':'')+'">'+(sg)+d.toFixed(1)+'</td>';}
+          else html+='<td>—</td>';
+        }
+        var avgD=deltas.length?deltas.reduce(function(a,b){return a+b;},0)/deltas.length:null;
+        html+='<td class="'+(avgD!=null&&avgD>0?'ag-cmp-delta-pos':avgD!=null&&avgD<0?'ag-cmp-delta-neg':'')+'" style="font-weight:700">'+(avgD!=null?(avgD>=0?'+':'')+avgD.toFixed(1):'—')+'</td><td></td><td></td></tr>';
       }
-      var avgD=deltas.length?deltas.reduce(function(a,b){return a+b;},0)/deltas.length:null;
-      html+='<td class="'+(avgD!=null&&avgD>0?'ag-cmp-delta-pos':avgD!=null&&avgD<0?'ag-cmp-delta-neg':'')+'" style="font-weight:700">'+(avgD!=null?(avgD>=0?'+':'')+avgD.toFixed(1):'—')+'</td><td></td><td></td></tr>';
-    }
-    prev=data;
-  });
-  html+='</tbody></table>';
-  document.getElementById('agCmpTable').innerHTML=html;
+      prev=data;
+    });
+    html+='</tbody></table>';
+    if(tbl) tbl.innerHTML=html;
+  } catch(e) {
+    console.error('agCmpDrawWeekCJ error:',e);
+    if(tbl) tbl.innerHTML='<div style="text-align:center;padding:20px;color:#e03131;font-size:12px;">週比較エラー: '+e.message+'</div>';
+  }
 }
 
 // ── 年間推移 ──
-function agCmpDrawYear(ctx,canvas,years,TC,GC){
-  var PAD={l:52,r:28,t:28,b:38};
-  var W=canvas.width-PAD.l-PAD.r, H=canvas.height-PAD.t-PAD.b;
-
-  // 週次平均を計算
-  var wkAvg={}, allWks={};
-  agRecords.forEach(function(r){
-    var y=r.date.slice(0,4); if(!agCmpYearsVis[y]) return;
-    var v=r[agCmpField]; if(v==null) return;
-    var wn=agCmpISOWeek(r.date);
-    if(!wkAvg[y]) wkAvg[y]={};
-    if(!wkAvg[y][wn]) wkAvg[y][wn]=[];
-    wkAvg[y][wn].push(v); allWks[wn]=true;
-  });
-  var wkNums=Object.keys(allWks).map(Number).sort(function(a,b){return a-b;});
-  if(!wkNums.length){agCmpNoData(ctx,canvas,TC,'データなし');return;}
-
-  // 平均値に変換 & 全値収集
-  var avgData={}, allV=[];
-  years.forEach(function(y){
-    avgData[y]={};
-    if(!wkAvg[y]) return;
-    Object.keys(wkAvg[y]).forEach(function(wn){
-      var avg=wkAvg[y][wn].reduce(function(a,b){return a+b;},0)/wkAvg[y][wn].length;
-      avgData[y][wn]=avg; allV.push(avg);
+function agCmpDrawYearCJ(years){
+  var tbl=document.getElementById('agCmpTable');
+  try {
+    var COLORS=Array.isArray(YEAR_COLORS)&&YEAR_COLORS.length?YEAR_COLORS:['#4c6ef5','#e03131','#2f9e44','#f08c00','#7048e8','#1098ad','#c2255c','#e67700'];
+    var records=Array.isArray(agRecords)?agRecords:[];
+    var yrs=Array.isArray(years)?years:[];
+    var wkAvg={},allWks={};
+    records.forEach(function(r){
+      if(!r||typeof r.date!=='string') return;
+      var y=r.date.slice(0,4); if(!agCmpYearsVis[y]) return;
+      var v=r[agCmpField]; if(v==null) return;
+      var wn=agCmpISOWeek(r.date);
+      if(!wkAvg[y]) wkAvg[y]={};
+      if(!wkAvg[y][wn]) wkAvg[y][wn]=[];
+      wkAvg[y][wn].push(v); allWks[wn]=true;
     });
-  });
-  if(!allV.length){agCmpNoData(ctx,canvas,TC,'データなし');return;}
-
-  var R=agCmpRange(allV,1);
-  function txIdx(i){return PAD.l+i*(W/(wkNums.length-1||1));}
-  function ty(v){return PAD.t+H-(v-R.min)/(R.max-R.min)*H;}
-
-  agCmpGrid(ctx,PAD,W,H,R.min,R.max,TC,GC);
-
-  // X軸: 週番号
-  var xstep=Math.max(1,Math.floor(wkNums.length/9));
-  ctx.textAlign='center';ctx.fillStyle=TC;ctx.font='10px sans-serif';
-  wkNums.forEach(function(wn,i){
-    if(i%xstep===0||i===wkNums.length-1){
-      ctx.fillText('W'+String(wn).padStart(2,'0'),txIdx(i),PAD.t+H+16);
-      ctx.strokeStyle=GC;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(txIdx(i),PAD.t+H);ctx.lineTo(txIdx(i),PAD.t+H+4);ctx.stroke();
+    var wkNums=Object.keys(allWks).map(Number).sort(function(a,b){return a-b;});
+    if(!wkNums.length){
+      agCmpDestroyChart();
+      if(tbl) tbl.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-m)">データなし</div>';
+      return;
     }
-  });
-  ctx.textAlign='center';ctx.font='bold 11px sans-serif';ctx.fillStyle=TC;
-  ctx.fillText('年間推移比較 (週次平均) — '+agCmpFieldLabel(), canvas.width/2, PAD.t-10);
-
-  years.forEach(function(y,idx){
-    var col=YEAR_COLORS[idx%YEAR_COLORS.length];
-    var data=avgData[y]; if(!data) return;
-    ctx.beginPath();ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.setLineDash([]);
-    var st=false;
-    wkNums.forEach(function(wn,i){
-      if(data[wn]==null){st=false;return;}
-      var x=txIdx(i),yy=ty(data[wn]);
-      st?ctx.lineTo(x,yy):(ctx.moveTo(x,yy),st=true);
+    var avgData={};
+    yrs.forEach(function(y){
+      avgData[y]={};
+      if(!wkAvg[y]) return;
+      Object.keys(wkAvg[y]).forEach(function(wn){
+        var avg=wkAvg[y][wn].reduce(function(a,b){return a+b;},0)/wkAvg[y][wn].length;
+        avgData[y][wn]=avg;
+      });
     });
-    ctx.stroke();
-    ctx.fillStyle=col;
-    wkNums.forEach(function(wn,i){
-      if(data[wn]==null) return;
-      ctx.beginPath();ctx.arc(txIdx(i),ty(data[wn]),3,0,Math.PI*2);ctx.fill();
+    var labels=wkNums.map(function(w){return 'W'+String(w).padStart(2,'0');});
+    var datasets=yrs.map(function(y,i){
+      return {
+        label:y,
+        data:wkNums.map(function(wn){return avgData[y]&&avgData[y][wn]!=null?avgData[y][wn]:null;}),
+        borderColor:COLORS[i%COLORS.length],
+        backgroundColor:COLORS[i%COLORS.length]+'30',
+        borderWidth:2,
+        spanGaps:false,
+        fill:false,
+        pointRadius:3
+      };
     });
-    // 年ラベル
-    var lw=null; for(var i=wkNums.length-1;i>=0;i--){if(data[wkNums[i]]!=null){lw=wkNums[i];break;}}
-    if(lw!=null){var li=wkNums.indexOf(lw);ctx.fillStyle=col;ctx.font='bold 10px sans-serif';ctx.textAlign='left';ctx.fillText(y,txIdx(li)+8,ty(data[lw])+4);}
-  });
-
-  // テーブル
-  var html='<table class="ag-tbl" style="font-size:10px;"><thead><tr><th>ISO週</th>';
-  years.forEach(function(y,i){html+='<th style="color:'+YEAR_COLORS[i%YEAR_COLORS.length]+'">'+y+'</th>';});
-  if(years.length>=2) html+='<th>Δ (直近2年)</th>';
-  html+='</tr></thead><tbody>';
-  wkNums.forEach(function(wn){
-    html+='<tr><td style="font-weight:700">W'+String(wn).padStart(2,'0')+'</td>';
-    var vals=[];
-    years.forEach(function(y,i){
-      var v=avgData[y]&&avgData[y][wn]!=null?avgData[y][wn]:null;
-      vals.push(v); html+='<td>'+(v!=null?v.toFixed(1):'—')+'</td>';
+    agCmpMakeChart(labels,datasets,'年間推移比較（週次平均）— '+agCmpFieldLabel());
+    // テーブル
+    var html='<table class="ag-tbl" style="font-size:10px;"><thead><tr><th>ISO週</th>';
+    yrs.forEach(function(y,i){html+='<th style="color:'+COLORS[i%COLORS.length]+'">'+y+'</th>';});
+    if(yrs.length>=2) html+='<th>Δ（直近2年）</th>';
+    html+='</tr></thead><tbody>';
+    wkNums.forEach(function(wn){
+      html+='<tr><td style="font-weight:700">W'+String(wn).padStart(2,'0')+'</td>';
+      var vals=[];
+      yrs.forEach(function(y,i){
+        var v=avgData[y]&&avgData[y][wn]!=null?avgData[y][wn]:null;
+        vals.push(v); html+='<td>'+(v!=null?v.toFixed(1):'—')+'</td>';
+      });
+      if(yrs.length>=2){
+        var a=vals[vals.length-2],b=vals[vals.length-1];
+        if(a!=null&&b!=null){var d=b-a;html+='<td class="'+(d>0?'ag-cmp-delta-pos':d<0?'ag-cmp-delta-neg':'')+'" style="font-weight:700">'+(d>=0?'+':'')+d.toFixed(1)+'</td>';}
+        else html+='<td>—</td>';
+      }
+      html+='</tr>';
     });
-    if(years.length>=2){
-      var a=vals[vals.length-2],b=vals[vals.length-1];
-      if(a!=null&&b!=null){var d=b-a;html+='<td class="'+(d>0?'ag-cmp-delta-pos':d<0?'ag-cmp-delta-neg':'')+'" style="font-weight:700">'+(d>=0?'+':'')+d.toFixed(1)+'</td>';}
-      else html+='<td>—</td>';
-    }
-    html+='</tr>';
-  });
-  html+='</tbody></table>';
-  document.getElementById('agCmpTable').innerHTML=html;
+    html+='</tbody></table>';
+    if(tbl) tbl.innerHTML=html;
+  } catch(e) {
+    console.error('agCmpDrawYearCJ error:',e);
+    if(tbl) tbl.innerHTML='<div style="text-align:center;padding:20px;color:#e03131;font-size:12px;">年間推移エラー: '+e.message+'</div>';
+  }
 }
 
 // ── 期間比較 ──
-function agCmpDrawPeriod(ctx,canvas,TC,GC){
-  var PAD={l:52,r:28,t:28,b:38};
-  var W=canvas.width-PAD.l-PAD.r, H=canvas.height-PAD.t-PAD.b;
-
-  var active=agCmpPeriods.filter(function(p){return p.start&&p.end&&p.start<=p.end;});
-  if(!active.length){agCmpNoData(ctx,canvas,TC,'開始・終了日を設定してください');return;}
-
-  var pd=active.map(function(p,i){
-    var recs=agRecords.filter(function(r){return r.date>=p.start&&r.date<=p.end;});
-    return {label:p.label,start:p.start,recs:recs,color:YEAR_COLORS[i%YEAR_COLORS.length]};
-  });
-
-  var maxDays=Math.max.apply(null,pd.map(function(x){return x.recs.length;}));
-  if(!maxDays){agCmpNoData(ctx,canvas,TC,'指定期間にデータなし');return;}
-
-  var allV=[];
-  pd.forEach(function(p){p.recs.forEach(function(r){if(r[agCmpField]!=null) allV.push(r[agCmpField]);});});
-  if(!allV.length){agCmpNoData(ctx,canvas,TC,'データなし');return;}
-
-  var R=agCmpRange(allV,1);
-  function txIdx(i){return PAD.l+i*(W/(maxDays-1||1));}
-  function ty(v){return PAD.t+H-(v-R.min)/(R.max-R.min)*H;}
-
-  agCmpGrid(ctx,PAD,W,H,R.min,R.max,TC,GC);
-
-  // X軸
-  var xstep=Math.max(1,Math.floor(maxDays/8));
-  ctx.textAlign='center';ctx.fillStyle=TC;ctx.font='10px sans-serif';
-  for(var di=0;di<maxDays;di++){
-    if(di%xstep===0||di===maxDays-1){
-      ctx.fillText('Day'+(di+1),txIdx(di),PAD.t+H+16);
-      ctx.strokeStyle=GC;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(txIdx(di),PAD.t+H);ctx.lineTo(txIdx(di),PAD.t+H+4);ctx.stroke();
+function agCmpDrawPeriodCJ(){
+  var tbl=document.getElementById('agCmpTable');
+  try {
+    var COLORS=Array.isArray(YEAR_COLORS)&&YEAR_COLORS.length?YEAR_COLORS:['#4c6ef5','#e03131','#2f9e44','#f08c00','#7048e8','#1098ad','#c2255c','#e67700'];
+    // agCmpPeriods が配列でない場合にリセット
+    if(!Array.isArray(agCmpPeriods)){
+      agCmpPeriods=[{start:'',end:'',label:'期間A'},{start:'',end:'',label:'期間B'},{start:'',end:'',label:'期間C'}];
     }
+    var active=agCmpPeriods.filter(function(p){return p&&p.start&&p.end&&p.start<=p.end;});
+    if(!active.length){
+      agCmpDestroyChart();
+      if(tbl) tbl.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-m)">開始・終了日を設定してください</div>';
+      return;
+    }
+    var records=Array.isArray(agRecords)?agRecords:[];
+    var pd=active.map(function(p,i){
+      var recs=records.filter(function(r){return r&&typeof r.date==='string'&&r.date>=p.start&&r.date<=p.end;});
+      return {label:p.label,start:p.start,recs:recs,color:COLORS[i%COLORS.length]};
+    });
+    var maxDays=Math.max.apply(null,pd.map(function(x){return x.recs.length;}));
+    if(!maxDays){
+      agCmpDestroyChart();
+      if(tbl) tbl.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-m)">指定期間にデータなし</div>';
+      return;
+    }
+    var labels=[];
+    for(var i=0;i<maxDays;i++) labels.push('Day'+(i+1));
+    var datasets=pd.map(function(p){
+      return {
+        label:p.label,
+        data:p.recs.map(function(r){return r[agCmpField]!=null?r[agCmpField]:null;}),
+        borderColor:p.color,
+        backgroundColor:p.color+'30',
+        borderWidth:2.5,
+        spanGaps:false,
+        fill:false
+      };
+    });
+    agCmpMakeChart(labels,datasets,'期間比較 — '+agCmpFieldLabel());
+    // テーブル
+    var html='<table class="ag-tbl" style="font-size:10px;"><thead><tr><th>期間</th><th>開始</th><th>件数</th><th>平均</th><th>最小</th><th>最大</th><th>差分</th></tr></thead><tbody>';
+    pd.forEach(function(p){
+      var vals=p.recs.map(function(r){return r[agCmpField];}).filter(function(v){return v!=null;});
+      var avg=vals.length?vals.reduce(function(a,b){return a+b;},0)/vals.length:null;
+      var mn=vals.length?Math.min.apply(null,vals):null,mx=vals.length?Math.max.apply(null,vals):null;
+      html+='<tr><td style="font-weight:800;color:'+p.color+'">'+p.label+'</td><td>'+p.start+'</td>'+
+        '<td style="text-align:center">'+p.recs.length+'</td>'+
+        '<td style="font-weight:700">'+(avg!=null?avg.toFixed(1):'—')+'</td>'+
+        '<td>'+(mn!=null?mn.toFixed(1):'—')+'</td><td>'+(mx!=null?mx.toFixed(1):'—')+'</td>'+
+        '<td>'+(mn!=null&&mx!=null?(mx-mn).toFixed(1):'—')+'</td></tr>';
+    });
+    html+='</tbody></table>';
+    if(tbl) tbl.innerHTML=html;
+  } catch(e) {
+    console.error('agCmpDrawPeriodCJ error:',e);
+    if(tbl) tbl.innerHTML='<div style="text-align:center;padding:20px;color:#e03131;font-size:12px;">期間比較エラー: '+e.message+'</div>';
   }
-  ctx.textAlign='center';ctx.font='bold 11px sans-serif';ctx.fillStyle=TC;
-  ctx.fillText('期間比較 — '+agCmpFieldLabel(), canvas.width/2, PAD.t-10);
-
-  pd.forEach(function(p){
-    ctx.beginPath();ctx.strokeStyle=p.color;ctx.lineWidth=2.5;ctx.setLineDash([]);
-    var st=false;
-    p.recs.forEach(function(r,i){
-      var v=r[agCmpField]; if(v==null){st=false;return;}
-      var x=txIdx(i),yy=ty(v);
-      st?ctx.lineTo(x,yy):(ctx.moveTo(x,yy),st=true);
-    });
-    ctx.stroke();
-    ctx.fillStyle=p.color;
-    p.recs.forEach(function(r,i){
-      if(r[agCmpField]==null) return;
-      ctx.beginPath();ctx.arc(txIdx(i),ty(r[agCmpField]),3,0,Math.PI*2);ctx.fill();
-    });
-    // ラベル
-    var lr=null;
-    for(var i=p.recs.length-1;i>=0;i--){if(p.recs[i][agCmpField]!=null){lr=p.recs[i];break;}}
-    if(lr){ctx.fillStyle=p.color;ctx.font='bold 10px sans-serif';ctx.textAlign='left';ctx.fillText(p.label,txIdx(p.recs.indexOf(lr))+8,ty(lr[agCmpField])+4);}
-  });
-
-  // テーブル
-  var html='<table class="ag-tbl" style="font-size:10px;"><thead><tr><th>期間</th><th>開始日</th><th>日数</th><th>平均</th><th>最低</th><th>最高</th><th>振れ幅</th></tr></thead><tbody>';
-  pd.forEach(function(p){
-    var vals=p.recs.map(function(r){return r[agCmpField];}).filter(function(v){return v!=null;});
-    var avg=vals.length?vals.reduce(function(a,b){return a+b;},0)/vals.length:null;
-    var mn=vals.length?Math.min.apply(null,vals):null, mx=vals.length?Math.max.apply(null,vals):null;
-    html+='<tr><td style="font-weight:800;color:'+p.color+'">'+p.label+'</td><td>'+p.start+'</td>'+
-      '<td style="text-align:center">'+p.recs.length+'</td>'+
-      '<td style="font-weight:700">'+(avg!=null?avg.toFixed(1):'—')+'</td>'+
-      '<td>'+(mn!=null?mn.toFixed(1):'—')+'</td><td>'+(mx!=null?mx.toFixed(1):'—')+'</td>'+
-      '<td>'+(mn!=null&&mx!=null?(mx-mn).toFixed(1):'—')+'</td></tr>';
-  });
-  html+='</tbody></table>';
-  document.getElementById('agCmpTable').innerHTML=html;
 }
+
 
 // ══════════════ Google Drive バックアップ ══════════════
 var _gdAutoTimer = null;
@@ -9186,6 +9424,7 @@ function gdCollectData(){
     wreport: (function(){ try{ return JSON.parse(localStorage.getItem('md_wreport_v1')||'{}'); }catch(e){ return {}; } })(),
     salesdata: (function(){ try{ return JSON.parse(localStorage.getItem('md_salesdata_v1')||'{}'); }catch(e){ return {}; } })(),
     templates: (function(){ try{ return JSON.parse(localStorage.getItem('md_templates_v1')||'null'); }catch(e){ return null; } })(),
+    icsEvents: icsEvents,
     settings: {
       theme: localStorage.getItem('md_theme'),
       sort: localStorage.getItem('md_sort'),
@@ -9282,6 +9521,7 @@ async function gdLoadBackup(){
     if(backup.wreport)  localStorage.setItem('md_wreport_v1',   JSON.stringify(backup.wreport));
     if(backup.salesdata)localStorage.setItem('md_salesdata_v1', JSON.stringify(backup.salesdata));
     if(backup.templates)localStorage.setItem('md_templates_v1', JSON.stringify(backup.templates));
+    if(backup.icsEvents){ icsEvents=backup.icsEvents; saveICSEvents(); }
     if(backup.settings){
       ['theme','sort','math','fontsize'].forEach(function(k){
         if(backup.settings[k]) localStorage.setItem('md_' + k, backup.settings[k]);
