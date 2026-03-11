@@ -6831,6 +6831,9 @@ function wrEnsure(){
       },
       general:{
         issues:'', nextWeekPlan:'', equipment:'', visitors:'', summary:''
+      },
+      sales:{
+        cSales:''
       }
     };
   }
@@ -6841,6 +6844,8 @@ function wrEnsure(){
   // Migration: add photos array if missing
   if(!wd.lettuce.photos) wd.lettuce.photos = [];
   if(!wd.tomato.photos) wd.tomato.photos = [];
+  // Migration: add sales comment if missing
+  if(!wd.sales) wd.sales = { cSales: '' };
   return wd;
 }
 
@@ -7401,7 +7406,70 @@ function wrRender(){
       '</tbody></table>';
   }
 
-  var isLet=wrCurTab==='lettuce', isTom=wrCurTab==='tomato', isGen=wrCurTab==='general';
+  var isLet=wrCurTab==='lettuce', isTom=wrCurTab==='tomato', isGen=wrCurTab==='general', isSal=wrCurTab==='sales';
+
+  // ── 収支テーブル（当週の salesData から生成）──
+  function salesWeekTable(){
+    var weekDates = dates;
+    var fmt0=function(v){ return v!=null?v.toLocaleString():'—'; };
+    var fmt1=function(v){ return v!=null?v.toFixed(1):'—'; };
+    var rows='';
+    var totTomH=0,totLetS=0,totTomSal=0,totLetSal=0,totTomL=0,totTomO=0,totLetL=0,totLetO=0,totTomGP=0,totLetGP=0,totGP=0,hasAny=false;
+    weekDates.forEach(function(dt,i){
+      var r = Array.isArray(salesData) ? salesData.find(function(x){ return x.date===dt; }) : null;
+      var dow=['月','火','水','木','金','土','日'][i];
+      if(!r){
+        rows+='<tr'+(i>=5?' style="background:var(--surface2)"':'')+'><td>'+dow+'<br><small style="color:var(--text-m)">'+dt.slice(5).replace('-','/')+'</small></td>'+
+          '<td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>';
+        return;
+      }
+      hasAny=true;
+      var tL=r.tomLabor||0, tO=r.tomOther||0, lL=r.letLabor||0, lO=r.letOther||0;
+      var tomGP=(r.tomSales||0)-tL-tO;
+      var letGP=(r.letSales||0)-lL-lO;
+      var gp=tomGP+letGP;
+      totTomH+=r.tomHarv||0; totLetS+=r.letShip||0;
+      totTomSal+=r.tomSales||0; totLetSal+=r.letSales||0;
+      totTomL+=tL; totTomO+=tO; totLetL+=lL; totLetO+=lO;
+      totTomGP+=tomGP; totLetGP+=letGP; totGP+=gp;
+      rows+='<tr'+(i>=5?' style="background:var(--surface2)"':'')+'><td>'+dow+'<br><small style="color:var(--text-m)">'+dt.slice(5).replace('-','/')+'</small></td>'+
+        '<td>'+fmt1(r.tomHarv)+'</td>'+
+        '<td>'+fmt1(r.letShip)+'</td>'+
+        '<td>'+(r.tomSales!=null?r.tomSales.toLocaleString():'—')+'</td>'+
+        '<td style="color:var(--text-m)">'+(tL?tL.toLocaleString():'—')+'</td>'+
+        '<td style="color:var(--text-m)">'+(tO?tO.toLocaleString():'—')+'</td>'+
+        '<td style="color:'+(tomGP>=0?'#2f9e44':'#e03131')+';font-weight:600">'+fmt0(r.tomSales!=null?tomGP:null)+'</td>'+
+        '<td>'+(r.letSales!=null?r.letSales.toLocaleString():'—')+'</td>'+
+        '<td style="color:var(--text-m)">'+(lL?lL.toLocaleString():'—')+'</td>'+
+        '<td style="color:var(--text-m)">'+(lO?lO.toLocaleString():'—')+'</td>'+
+        '<td style="color:'+(letGP>=0?'#2f9e44':'#e03131')+';font-weight:600">'+fmt0(r.letSales!=null?letGP:null)+'</td>'+
+        '<td style="color:'+(gp>=0?'#2f9e44':'#e03131')+';font-weight:700">'+fmt0((r.tomSales!=null||r.letSales!=null)?gp:null)+'</td></tr>';
+    });
+    if(!hasAny) return '<div style="padding:14px;color:var(--text-m);text-align:center">この週の収支データがありません。<br>「収支」タブから入力できます。</div>';
+    rows+='<tr class="wr-total-row"><td>週計</td>'+
+      '<td>'+totTomH.toFixed(1)+'</td>'+
+      '<td>'+totLetS.toFixed(1)+'</td>'+
+      '<td>'+totTomSal.toLocaleString()+'</td>'+
+      '<td>'+totTomL.toLocaleString()+'</td>'+
+      '<td>'+totTomO.toLocaleString()+'</td>'+
+      '<td style="color:'+(totTomGP>=0?'#2f9e44':'#e03131')+'">'+totTomGP.toLocaleString()+'</td>'+
+      '<td>'+totLetSal.toLocaleString()+'</td>'+
+      '<td>'+totLetL.toLocaleString()+'</td>'+
+      '<td>'+totLetO.toLocaleString()+'</td>'+
+      '<td style="color:'+(totLetGP>=0?'#2f9e44':'#e03131')+'">'+totLetGP.toLocaleString()+'</td>'+
+      '<td style="color:'+(totGP>=0?'#2f9e44':'#e03131')+';font-weight:700">'+totGP.toLocaleString()+'</td></tr>';
+    return '<div style="overflow-x:auto"><table class="wr-table" style="font-size:11px;min-width:800px">'+
+      '<thead>'+
+      '<tr style="background:var(--surface3)"><th rowspan="2">曜日</th><th rowspan="2">収穫<br>(kg)</th><th rowspan="2">出荷<br>(c/s)</th>'+
+      '<th colspan="4" style="background:#e8f5e9;border-bottom:1px solid var(--brd)">🍅 トマト</th>'+
+      '<th colspan="4" style="background:#e3f2fd;border-bottom:1px solid var(--brd)">🥬 レタス</th>'+
+      '<th rowspan="2">合計粗利<br>(円)</th></tr>'+
+      '<tr style="background:var(--surface3)">'+
+      '<th style="background:#e8f5e9">売上(円)</th><th style="background:#e8f5e9">人件費(円)</th><th style="background:#e8f5e9">他支出(円)</th><th style="background:#e8f5e9">粗利(円)</th>'+
+      '<th style="background:#e3f2fd">売上(円)</th><th style="background:#e3f2fd">人件費(円)</th><th style="background:#e3f2fd">他支出(円)</th><th style="background:#e3f2fd">粗利(円)</th>'+
+      '</tr></thead>'+
+      '<tbody>'+rows+'</tbody></table></div>';
+  }
 
   var html =
     '<div class="wr-wrap">'+
@@ -7417,6 +7485,7 @@ function wrRender(){
       '<button class="wr-tab'+(isLet?' active':'')+'" data-wrtab="lettuce" onclick="wrSwitchTab(\'lettuce\')">🥬 レタス</button>'+
       '<button class="wr-tab'+(isTom?' active':'')+'" data-wrtab="tomato" onclick="wrSwitchTab(\'tomato\')">🍅 トマト</button>'+
       '<button class="wr-tab'+(isGen?' active':'')+'" data-wrtab="general" onclick="wrSwitchTab(\'general\')">📝 総括・その他</button>'+
+      '<button class="wr-tab'+(isSal?' active':'')+'" data-wrtab="sales" onclick="wrSwitchTab(\'sales\')">💰 収支</button>'+
     '</div>'+
 
     // ── LETTUCE PANE ──
@@ -7560,6 +7629,20 @@ function wrRender(){
         '<div class="wr-section-hd">📝 週次総括</div>'+
         '<div class="wr-section-body">'+ta('wrG_summary', d.general.summary, '今週全体を振り返っての総括コメント...', 5)+'</div></div>'+
     '</div>'+
+
+    // ── SALES PANE ──
+    '<div class="wr-pane'+(isSal?' active':'')+'" id="wrPaneSales">'+
+      '<div class="wr-section">'+
+        '<div class="wr-section-hd">💰 1. 今週の売上・粗利<span style="font-size:10px;font-weight:400;color:var(--text-m);margin-left:8px;">（「収支」タブのデータより自動集計）</span></div>'+
+        '<div class="wr-section-body">'+
+          salesWeekTable()+
+        '</div></div>'+
+      '<div class="wr-section">'+
+        '<div class="wr-section-hd">💬 収支コメント</div>'+
+        '<div class="wr-section-body">'+
+          ta('wrSC_sales', d.sales.cSales, '今週の売上・費用・収支状況についてのコメントを記入...', 5)+
+        '</div></div>'+
+    '</div>'+
     '</div>';
 
   wrap.innerHTML = html;
@@ -7603,6 +7686,7 @@ function wrRender(){
   wrBind('wrG_visitors',      'general.visitors');
   wrBind('wrG_nextWeekPlan',  'general.nextWeekPlan');
   wrBind('wrG_summary',       'general.summary');
+  wrBind('wrSC_sales',        'sales.cSales');
 
   // Re-render harvest date auto-calc on seedDate/targetDays change
   WR_LETS.forEach(function(v){
@@ -7743,6 +7827,8 @@ function wrExportPptx(){
   var CW = 'FFFFFF';
   var CT = '1A2E1A'; // text dark
   var CMT= '5A7A52'; // muted text
+  var CY = '8B6914'; // gold dark
+  var CY2= 'B8860B'; // gold mid
 
   // ── ヘルパー: base64 URI を pptx用に変換（"data:" prefix除去）
   function imgData(src){ return src.replace(/^data:/, ''); }
@@ -7800,6 +7886,16 @@ function wrExportPptx(){
       try{ s.addImage({data:imgData(photos[i]), x:pos[i].x, y:pos[i].y, w:2.0, h:1.9}); }
       catch(e){ console.warn('写真スキップ:', e); }
     }
+  }
+
+  // ── ヘルパー: 金色テーマスライド（収支用）
+  function goldSlide(title, icon){
+    var s = pres.addSlide();
+    s.background = {color:'FFFBF0'};
+    colorBlock(s, 0, 0, 10, 0.62, CY);
+    s.addText(icon+' '+title, {x:0.25, y:0, w:9.5, h:0.62, fontSize:17, bold:true, color:CW, valign:'middle', margin:0});
+    colorBlock(s, 0, 0.62, 0.05, 5.0, CY2);
+    return s;
   }
 
   try { // ━━ 全体をtry-catchで囲む ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -7939,6 +8035,99 @@ function wrExportPptx(){
     s10.addText(d.general.visitors,{x:0.15,y:y10+0.03,w:9.7,h:0.35,fontSize:11,color:CT,wrap:true,valign:'top'});
   }
 
+  // ━━ SLIDE 11: 収支 セクション ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  var s11sec = pres.addSlide();
+  s11sec.background = {color:CY};
+  colorBlock(s11sec, 7.2, 0, 2.8, 5.625, CY2);
+  colorBlock(s11sec, 8.5, 0, 1.5, 5.625, 'F5C842');
+  s11sec.addText('💰 収支', {x:0.6, y:1.7, w:6.5, h:1.4, fontSize:48, bold:true, color:CW, margin:0});
+  s11sec.addText('売上・粗利・収支コメント', {x:0.6, y:3.2, w:6.5, h:0.6, fontSize:18, color:'FFF3C4', margin:0});
+
+  // ━━ SLIDE 12: 収支 データテーブル ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  var s12 = goldSlide('今週の売上・粗利', '💰');
+  // salesData をこの週の日付でフィルタして1行ずつ構築
+  var _salRows = dates.map(function(dt){
+    var rec = Array.isArray(salesData) ? salesData.find(function(r){ return r.date===dt; }) : null;
+    var dow = ['日','月','火','水','木','金','土'][new Date(dt+'T00:00:00').getDay()];
+    var label = dt.slice(5).replace('-','/') + '(' + dow + ')';
+    if(!rec) return {label:label, tH:'—', lS:'—', tSal:'—', lSal:'—', tGr:'—', lGr:'—', tot:'—', hasData:false};
+    var tH   = parseFloat(rec.tomHarv)||0;
+    var lS   = parseFloat(rec.letShip)||0;
+    var tSal = parseFloat(rec.tomSales)||0;
+    var lSal = parseFloat(rec.letSales)||0;
+    var tGr  = tSal - (parseFloat(rec.tomLabor)||0) - (parseFloat(rec.tomOther)||0);
+    var lGr  = lSal - (parseFloat(rec.letLabor)||0) - (parseFloat(rec.letOther)||0);
+    var tot  = tGr + lGr;
+    return {label:label, tH:tH.toFixed(1), lS:lS.toFixed(1),
+            tSal:tSal.toLocaleString(), lSal:lSal.toLocaleString(),
+            tGr:tGr.toLocaleString(), lGr:lGr.toLocaleString(),
+            tot:tot.toLocaleString(), hasData:true,
+            _tSal:tSal, _lSal:lSal, _tGr:tGr, _lGr:lGr, _tot:tot, _tH:tH, _lS:lS};
+  });
+  var _salSum = {tH:0, lS:0, tSal:0, lSal:0, tGr:0, lGr:0, tot:0};
+  _salRows.forEach(function(r){ if(!r.hasData) return;
+    _salSum.tH+=r._tH; _salSum.lS+=r._lS;
+    _salSum.tSal+=r._tSal; _salSum.lSal+=r._lSal;
+    _salSum.tGr+=r._tGr; _salSum.lGr+=r._lGr; _salSum.tot+=r._tot;
+  });
+  // 支出計(labor+other)を追加してスライドに表示
+  var yhOpt = {fill:{color:CY}, color:CW, bold:true, align:'center', fontSize:9};
+  var yCG = 'E8F5E9'; // tomato bg in header
+  var yCB = 'E3F2FD'; // lettuce bg in header
+  var salHdr12a = [
+    {text:'日付',       options:{fill:{color:CY}, color:CW, bold:true, align:'center', fontSize:9, rowspan:2}},
+    {text:'収穫\n(kg)', options:{fill:{color:CY}, color:CW, bold:true, align:'center', fontSize:9, rowspan:2}},
+    {text:'出荷\n(c/s)',options:{fill:{color:CY}, color:CW, bold:true, align:'center', fontSize:9, rowspan:2}},
+    {text:'🍅 トマト',  options:{fill:{color:'C8E6C9'}, color:CT, bold:true, align:'center', fontSize:9, colspan:3}},
+    {text:'🥬 レタス',  options:{fill:{color:'BBDEFB'}, color:CT, bold:true, align:'center', fontSize:9, colspan:3}},
+    {text:'合計粗利\n(円)',options:{fill:{color:CY}, color:CW, bold:true, align:'center', fontSize:9, rowspan:2}}
+  ];
+  var salHdr12b = [
+    {text:'売上(円)',  options:{fill:{color:'C8E6C9'}, color:CT, bold:true, align:'center', fontSize:8}},
+    {text:'支出(円)',  options:{fill:{color:'C8E6C9'}, color:CT, bold:true, align:'center', fontSize:8}},
+    {text:'粗利(円)',  options:{fill:{color:'C8E6C9'}, color:CT, bold:true, align:'center', fontSize:8}},
+    {text:'売上(円)',  options:{fill:{color:'BBDEFB'}, color:CT, bold:true, align:'center', fontSize:8}},
+    {text:'支出(円)',  options:{fill:{color:'BBDEFB'}, color:CT, bold:true, align:'center', fontSize:8}},
+    {text:'粗利(円)',  options:{fill:{color:'BBDEFB'}, color:CT, bold:true, align:'center', fontSize:8}}
+  ];
+  var salBody12 = _salRows.map(function(r,i){
+    var bg = i%2===0 ? 'FFFBF0' : 'FFFFFF';
+    var tExp = r.hasData ? ((parseFloat(String(r._tSal||0))||0) - (r._tGr||0)).toLocaleString() : '—';
+    var lExp = r.hasData ? ((parseFloat(String(r._lSal||0))||0) - (r._lGr||0)).toLocaleString() : '—';
+    return [
+      {text:r.label, options:{fill:{color:bg}, bold:true, color:CT, fontSize:8}},
+      {text:r.tH,    options:{fill:{color:bg}, align:'center', color:CT, fontSize:8}},
+      {text:r.lS,    options:{fill:{color:bg}, align:'center', color:CT, fontSize:8}},
+      {text:r.tSal,  options:{fill:{color:bg}, align:'right',  color:CT, fontSize:8}},
+      {text:tExp,    options:{fill:{color:bg}, align:'right',  color:'777777', fontSize:8}},
+      {text:r.tGr,   options:{fill:{color:bg}, align:'right',  color:CT, fontSize:8}},
+      {text:r.lSal,  options:{fill:{color:bg}, align:'right',  color:CT, fontSize:8}},
+      {text:lExp,    options:{fill:{color:bg}, align:'right',  color:'777777', fontSize:8}},
+      {text:r.lGr,   options:{fill:{color:bg}, align:'right',  color:CT, fontSize:8}},
+      {text:r.tot,   options:{fill:{color:bg}, align:'right',  color:CT, fontSize:8}}
+    ];
+  });
+  var _ytotBg = 'FFF3C4';
+  var _totTExp = (_salSum.tSal - _salSum.tGr).toLocaleString();
+  var _totLExp = (_salSum.lSal - _salSum.lGr).toLocaleString();
+  salBody12.push([
+    {text:'週計', options:{fill:{color:_ytotBg}, bold:true, color:CT, fontSize:9}},
+    {text:_salSum.tH.toFixed(1), options:{fill:{color:_ytotBg}, align:'center', bold:true, color:CT, fontSize:9}},
+    {text:_salSum.lS.toFixed(1), options:{fill:{color:_ytotBg}, align:'center', bold:true, color:CT, fontSize:9}},
+    {text:_salSum.tSal.toLocaleString(), options:{fill:{color:_ytotBg}, align:'right', bold:true, color:CT, fontSize:9}},
+    {text:_totTExp, options:{fill:{color:_ytotBg}, align:'right', bold:true, color:'777777', fontSize:9}},
+    {text:_salSum.tGr.toLocaleString(), options:{fill:{color:_ytotBg}, align:'right', bold:true, color:CT, fontSize:9}},
+    {text:_salSum.lSal.toLocaleString(), options:{fill:{color:_ytotBg}, align:'right', bold:true, color:CT, fontSize:9}},
+    {text:_totLExp, options:{fill:{color:_ytotBg}, align:'right', bold:true, color:'777777', fontSize:9}},
+    {text:_salSum.lGr.toLocaleString(), options:{fill:{color:_ytotBg}, align:'right', bold:true, color:CT, fontSize:9}},
+    {text:_salSum.tot.toLocaleString(), options:{fill:{color:_ytotBg}, align:'right', bold:true, color:CT, fontSize:9}}
+  ]);
+  s12.addTable([salHdr12a, salHdr12b].concat(salBody12), {x:0.15, y:0.75, w:9.7, h:3.3,
+    colW:[1.5,0.8,0.8,1.0,0.9,0.9,1.0,0.9,0.9,1.0], border:{pt:0.5, color:'F5D06B'}, autoPage:false});
+  if(d.sales && d.sales.cSales && d.sales.cSales.trim()){
+    s12.addText('💬 収支コメント: '+d.sales.cSales, {x:0.2, y:4.15, w:9.6, h:0.45, fontSize:10, color:CMT, wrap:true, italic:true});
+  }
+
   // ━━ エクスポート実行 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   var fname = '農業週次報告_'+wrCurYear+'_W'+String(wrCurWeek).padStart(2,'0')+'.pptx';
   pres.writeFile({fileName: fname}).then(function(){
@@ -8009,6 +8198,73 @@ function wrPrint(){
       '</tr></thead><tbody>'+rows+'</tbody></table>';
   }
 
+  // レタス専用（外気温・外Rad + レタス系のみ）
+  function pLetWeatherTable(){
+    var rows='';
+    var s={oT:0,oR:0,lT:0,lDT:0,lNT:0,lP:0,lH:0,lDH:0,lNH:0};
+    var n={oT:0,oR:0,lT:0,lDT:0,lNT:0,lP:0,lH:0,lDH:0,lNH:0};
+    for(var i=0;i<7;i++){
+      var r=recMap[dates[i]];
+      var oT=wrV(r,'outTemp'),oR=wrV(r,'outRad');
+      var lT=wrV(r,'letTemp'),lDT=wrV(r,'letDayTemp'),lNT=wrV(r,'letNightTemp'),lP=wrV(r,'letPAR');
+      var lH=wrV(r,'letHD'),lDH=wrV(r,'letDayHD'),lNH=wrV(r,'letNightHD');
+      if(oT!=null){s.oT+=oT;n.oT++;} if(oR!=null){s.oR+=oR;n.oR++;}
+      if(lT!=null){s.lT+=lT;n.lT++;} if(lDT!=null){s.lDT+=lDT;n.lDT++;}
+      if(lNT!=null){s.lNT+=lNT;n.lNT++;} if(lP!=null){s.lP+=lP;n.lP++;}
+      if(lH!=null){s.lH+=lH;n.lH++;} if(lDH!=null){s.lDH+=lDH;n.lDH++;}
+      if(lNH!=null){s.lNH+=lNH;n.lNH++;}
+      var bg=i>=5?' style="background:#f5f0ff"':'';
+      rows+='<tr'+bg+'><td>'+DOW[i]+'<br><small>'+dates[i].slice(5).replace('-','/')+'</small></td>'+
+        '<td>'+fw(oT)+'</td><td>'+fw(oR,0)+'</td>'+
+        '<td>'+fw(lT)+'</td><td>'+fw(lDT)+'</td><td>'+fw(lNT)+'</td>'+
+        '<td>'+fw(lP)+'</td><td>'+fw(lH)+'</td><td>'+fw(lDH)+'</td><td>'+fw(lNH)+'</td></tr>';
+    }
+    rows+='<tr style="font-weight:bold;background:#eee"><td>週avg/計</td>'+
+      '<td>'+(n.oT?fw(s.oT/n.oT):'—')+'</td><td>'+(n.oR?fw(s.oR,0):'—')+'</td>'+
+      '<td>'+(n.lT?fw(s.lT/n.lT):'—')+'</td><td>'+(n.lDT?fw(s.lDT/n.lDT):'—')+'</td>'+
+      '<td>'+(n.lNT?fw(s.lNT/n.lNT):'—')+'</td><td>'+(n.lP?fw(s.lP,1):'—')+'</td>'+
+      '<td>'+(n.lH?fw(s.lH/n.lH):'—')+'</td><td>'+(n.lDH?fw(s.lDH/n.lDH):'—')+'</td>'+
+      '<td>'+(n.lNH?fw(s.lNH/n.lNH):'—')+'</td></tr>';
+    return '<table border="1" cellpadding="3" style="border-collapse:collapse;width:100%;font-size:9px">'+
+      '<thead style="background:#d8eed8"><tr>'+
+      '<th>曜</th><th>外気温℃</th><th>外Rad</th>'+
+      '<th>レタス24h℃</th><th>昼℃</th><th>夜℃</th><th>PAR</th>'+
+      '<th>レタスHD24h</th><th>HD昼</th><th>HD夜</th>'+
+      '</tr></thead><tbody>'+rows+'</tbody></table>';
+  }
+  // トマト専用（外気温・外Rad + トマト系のみ）
+  function pTomWeatherTable(){
+    var rows='';
+    var s={oT:0,oR:0,tT:0,tD:0,tN:0,tH:0,tW:0};
+    var n={oT:0,oR:0,tT:0,tD:0,tN:0,tH:0,tW:0};
+    for(var i=0;i<7;i++){
+      var r=recMap[dates[i]];
+      var oT=wrV(r,'outTemp'),oR=wrV(r,'outRad');
+      var tT=wrV(r,'tomTemp'),tD=wrV(r,'tomDayTemp'),tN=wrV(r,'tomNightTemp');
+      var tH=wrV(r,'tomHD'),tW=wrV(r,'tomWater');
+      if(oT!=null){s.oT+=oT;n.oT++;} if(oR!=null){s.oR+=oR;n.oR++;}
+      if(tT!=null){s.tT+=tT;n.tT++;} if(tD!=null){s.tD+=tD;n.tD++;}
+      if(tN!=null){s.tN+=tN;n.tN++;} if(tH!=null){s.tH+=tH;n.tH++;}
+      if(tW!=null){s.tW+=tW;n.tW++;}
+      var bg=i>=5?' style="background:#f5f0ff"':'';
+      rows+='<tr'+bg+'><td>'+DOW[i]+'<br><small>'+dates[i].slice(5).replace('-','/')+'</small></td>'+
+        '<td>'+fw(oT)+'</td><td>'+fw(oR,0)+'</td>'+
+        '<td>'+fw(tT)+'</td><td>'+fw(tD)+'</td><td>'+fw(tN)+'</td>'+
+        '<td>'+fw(tH)+'</td><td>'+fw(tW,1)+'</td></tr>';
+    }
+    rows+='<tr style="font-weight:bold;background:#eee"><td>週avg/計</td>'+
+      '<td>'+(n.oT?fw(s.oT/n.oT):'—')+'</td><td>'+(n.oR?fw(s.oR,0):'—')+'</td>'+
+      '<td>'+(n.tT?fw(s.tT/n.tT):'—')+'</td><td>'+(n.tD?fw(s.tD/n.tD):'—')+'</td>'+
+      '<td>'+(n.tN?fw(s.tN/n.tN):'—')+'</td><td>'+(n.tH?fw(s.tH/n.tH):'—')+'</td>'+
+      '<td>'+(n.tW?fw(s.tW,1):'—')+'</td></tr>';
+    return '<table border="1" cellpadding="3" style="border-collapse:collapse;width:100%;font-size:9px">'+
+      '<thead style="background:#ffd8d8"><tr>'+
+      '<th>曜</th><th>外気温℃</th><th>外Rad</th>'+
+      '<th>トマト24h℃</th><th>昼℃</th><th>夜℃</th>'+
+      '<th>トマトHD</th><th>灌水L/m²</th>'+
+      '</tr></thead><tbody>'+rows+'</tbody></table>';
+  }
+
   function pSec(title,body,comment,bg){
     return '<div style="break-inside:avoid;margin:0 0 10px;padding:7px;border:1px solid #ccc;border-radius:4px">'+
       '<div style="font-size:11px;font-weight:bold;background:'+(bg||'#e8f4e8')+
@@ -8076,14 +8332,14 @@ function wrPrint(){
       pSec('🌱 播種量', letSeedAmtH, d.lettuce.cSeed)+
     pSec('📅 栽培日数管理', letGrowH, d.lettuce.cGrow||'')+
     '</div>'+
-    pSec('🌡️ 気象データ', pWeatherTable(), d.lettuce.cWeather)+
+    pSec('🌡️ 気象データ（レタス）', pLetWeatherTable(), d.lettuce.cWeather)+
     (d.lettuce.plantCondition||d.lettuce.cPlant?pSec('🌿 植物の状態',pPre(d.lettuce.plantCondition),d.lettuce.cPlant):'')+
     (d.lettuce.diseaseInfo?pSec('🐛 病害虫',pPre(d.lettuce.diseaseInfo)):'')+
     (d.lettuce.envChanges||d.lettuce.cEnv?pSec('⚙️ 環境制御変更',pPre(d.lettuce.envChanges),d.lettuce.cEnv):'')+
     (d.lettuce.cGeneral?'<div style="background:#e8f4e8;padding:5px;border-radius:3px;font-size:10px;margin-bottom:10px"><b>📝 レタス総合:</b> '+d.lettuce.cGeneral+'</div>':'')+
     '<h2>🍅 トマト</h2>'+
     pSec('📦 出荷量・収穫量・廃棄量', tomShipH, d.tomato.cShip, '#ffd8d8')+
-    pSec('🌡️ 気象データ', pWeatherTable(), d.tomato.cWeather, '#ffd8d8')+
+    pSec('🌡️ 気象データ（トマト）', pTomWeatherTable(), d.tomato.cWeather, '#ffd8d8')+
     (d.tomato.cIrrigation?pSec('💧 灌水コメント',pPre(''),d.tomato.cIrrigation,'#d8eeff'):'')+
     (d.tomato.plantCondition||d.tomato.cPlant?pSec('🍅 植物の状態',pPre(d.tomato.plantCondition),d.tomato.cPlant,'#ffd8d8'):'')+
     (d.tomato.fruitCondition?pSec('🔬 果実の状態',pPre(d.tomato.fruitCondition),'','#ffd8d8'):'')+
@@ -8098,6 +8354,63 @@ function wrPrint(){
       (d.general.nextWeekPlan?pSec('📋 翌週の作業予定',pPre(d.general.nextWeekPlan),'','#fff4cc'):'')+
     '</div>'+
     (d.general.summary?'<div style="background:#fff4cc;padding:6px;border-radius:3px;font-size:10px"><b>📝 週次総括:</b><br>'+d.general.summary+'</div>':'')+
+
+    // ── 収支セクション ──
+    (function(){
+      var fmt0=function(v){return v!=null?v.toLocaleString():'—';};
+      var fmt1=function(v){return v!=null?v.toFixed(1):'—';};
+      var rows=''; var hasAny=false;
+      var totTomH=0,totLetS=0,totTomSal=0,totLetSal=0,totTomL=0,totTomO=0,totLetL=0,totLetO=0,totTomGP=0,totLetGP=0,totGP=0;
+      dates.forEach(function(dt,i){
+        var r=Array.isArray(salesData)?salesData.find(function(x){return x.date===dt;}):null;
+        var dow=['月','火','水','木','金','土','日'][i];
+        if(!r){rows+='<tr'+(i>=5?' style="background:#f5f0ff"':'')+'><td>'+dow+' '+dt.slice(5).replace('-','/')+'</td><td colspan="11" style="color:#999">データなし</td></tr>';return;}
+        hasAny=true;
+        var tL=r.tomLabor||0,tO=r.tomOther||0,lL=r.letLabor||0,lO=r.letOther||0;
+        var tomGP=(r.tomSales||0)-tL-tO;
+        var letGP=(r.letSales||0)-lL-lO;
+        var gp=tomGP+letGP;
+        totTomH+=r.tomHarv||0;totLetS+=r.letShip||0;
+        totTomSal+=r.tomSales||0;totLetSal+=r.letSales||0;
+        totTomL+=tL;totTomO+=tO;totLetL+=lL;totLetO+=lO;
+        totTomGP+=tomGP;totLetGP+=letGP;totGP+=gp;
+        rows+='<tr'+(i>=5?' style="background:#f5f0ff"':'')+'><td>'+dow+' '+dt.slice(5).replace('-','/')+'</td>'+
+          '<td>'+fmt1(r.tomHarv)+'</td><td>'+fmt1(r.letShip)+'</td>'+
+          '<td>'+(r.tomSales!=null?r.tomSales.toLocaleString():'—')+'</td>'+
+          '<td style="color:#777">'+(tL?tL.toLocaleString():'—')+'</td>'+
+          '<td style="color:#777">'+(tO?tO.toLocaleString():'—')+'</td>'+
+          '<td style="color:'+(tomGP>=0?'#2a7a2a':'#c0392b')+'">'+fmt0(r.tomSales!=null?tomGP:null)+'</td>'+
+          '<td>'+(r.letSales!=null?r.letSales.toLocaleString():'—')+'</td>'+
+          '<td style="color:#777">'+(lL?lL.toLocaleString():'—')+'</td>'+
+          '<td style="color:#777">'+(lO?lO.toLocaleString():'—')+'</td>'+
+          '<td style="color:'+(letGP>=0?'#2a7a2a':'#c0392b')+'">'+fmt0(r.letSales!=null?letGP:null)+'</td>'+
+          '<td style="font-weight:bold;color:'+(gp>=0?'#2a7a2a':'#c0392b')+'">'+fmt0((r.tomSales!=null||r.letSales!=null)?gp:null)+'</td></tr>';
+      });
+      if(hasAny) rows+='<tr style="font-weight:bold;background:#e8e8e8"><td>週計</td>'+
+        '<td>'+totTomH.toFixed(1)+'</td><td>'+totLetS.toFixed(1)+'</td>'+
+        '<td>'+totTomSal.toLocaleString()+'</td>'+
+        '<td>'+totTomL.toLocaleString()+'</td>'+
+        '<td>'+totTomO.toLocaleString()+'</td>'+
+        '<td style="color:'+(totTomGP>=0?'#2a7a2a':'#c0392b')+'">'+totTomGP.toLocaleString()+'</td>'+
+        '<td>'+totLetSal.toLocaleString()+'</td>'+
+        '<td>'+totLetL.toLocaleString()+'</td>'+
+        '<td>'+totLetO.toLocaleString()+'</td>'+
+        '<td style="color:'+(totLetGP>=0?'#2a7a2a':'#c0392b')+'">'+totLetGP.toLocaleString()+'</td>'+
+        '<td style="color:'+(totGP>=0?'#2a7a2a':'#c0392b')+'">'+totGP.toLocaleString()+'</td></tr>';
+      var tbl=hasAny?'<table border="1" cellpadding="3" style="border-collapse:collapse;font-size:9px;width:100%">'+
+        '<thead style="background:#fff0cc"><tr>'+
+        '<th rowspan="2">曜日</th><th rowspan="2">ト収穫(kg)</th><th rowspan="2">レ出荷(c/s)</th>'+
+        '<th colspan="4" style="border-bottom:1px solid #ccc">🍅 トマト</th>'+
+        '<th colspan="4" style="border-bottom:1px solid #ccc">🥬 レタス</th>'+
+        '<th rowspan="2">合計粗利(円)</th></tr>'+
+        '<tr style="background:#fff0cc">'+
+        '<th>売上(円)</th><th>人件費(円)</th><th>他支出(円)</th><th>粗利(円)</th>'+
+        '<th>売上(円)</th><th>人件費(円)</th><th>他支出(円)</th><th>粗利(円)</th></tr></thead>'+
+        '<tbody>'+rows+'</tbody></table>':'<p style="color:#888;font-size:10px">この週の収支データはありません。</p>';
+      return '<h2>💰 収支</h2>'+
+        pSec('📊 今週の売上・粗利', tbl, d.sales&&d.sales.cSales||'', '#fff0cc');
+    })()+
+
     '</body></html>');
   pw.document.close(); pw.focus();
   setTimeout(function(){ pw.print(); }, 600);
