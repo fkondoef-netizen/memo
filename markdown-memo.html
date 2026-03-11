@@ -959,6 +959,39 @@
     .wr-dot{display:inline-block;width:9px;height:9px;border-radius:50%;
       margin-right:5px;vertical-align:middle;flex-shrink:0;}
 
+    /* ── 販売管理 ── */
+    .sm-wrap{flex:1;overflow-y:auto;display:flex;flex-direction:column;padding:10px 12px;gap:8px;}
+    .sm-nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .sm-week-label{font-weight:700;font-size:13px;color:var(--primary);min-width:95px;text-align:center;}
+    .sm-tabs{display:flex;gap:4px;border-bottom:2px solid var(--brd);margin-bottom:4px;}
+    .sm-tab{padding:5px 16px;border:none;background:none;cursor:pointer;font-size:12px;font-weight:600;
+      color:var(--text-m);border-bottom:3px solid transparent;margin-bottom:-2px;border-radius:4px 4px 0 0;}
+    .sm-tab.active{color:var(--primary);border-bottom-color:var(--primary);background:var(--surface2);}
+    .sm-table-wrap{overflow-x:auto;border-radius:6px;}
+    .sm-table{border-collapse:collapse;width:100%;font-size:11px;min-width:960px;}
+    .sm-table th{background:var(--surface3);padding:4px 6px;text-align:center;
+      white-space:nowrap;border:1px solid var(--brd);font-size:10px;}
+    .sm-table td{padding:2px 3px;border:1px solid var(--brd);text-align:center;vertical-align:middle;}
+    .sm-table .sm-dest-td{text-align:left;min-width:90px;}
+    .sm-table .sm-total-row td{background:var(--surface2);font-weight:700;font-size:11px;}
+    .sm-table .sm-weekend{background:rgba(100,100,200,.06);}
+    .sm-in{width:100%;box-sizing:border-box;border:1px solid var(--brd);border-radius:3px;
+      padding:2px 4px;font-size:11px;background:var(--bg);color:var(--text);}
+    .sm-in-n{width:62px;border:1px solid var(--brd);border-radius:3px;
+      padding:2px 3px;font-size:11px;background:var(--bg);color:var(--text);text-align:right;}
+    .sm-in-qty{width:48px;border:1px solid var(--brd);border-radius:3px;
+      padding:2px 3px;font-size:11px;background:var(--bg);color:var(--text);text-align:right;}
+    .sm-add-btn{background:var(--primary);color:#fff;border:none;border-radius:4px;
+      padding:5px 14px;cursor:pointer;font-size:11px;font-weight:600;}
+    .sm-add-btn:hover{opacity:.85;}
+    .sm-del-btn{background:#e03131;color:#fff;border:none;border-radius:3px;
+      padding:2px 7px;cursor:pointer;font-size:10px;}
+    .sm-del-btn:hover{opacity:.8;}
+    .sm-empty{text-align:center;padding:36px 20px;color:var(--text-m);font-size:12px;
+      border:2px dashed var(--brd);border-radius:8px;margin-top:8px;}
+    .sm-group-hd{padding:4px 6px;font-size:10px;font-weight:700;letter-spacing:.5px;
+      background:var(--surface3);border-bottom:1px solid var(--brd);color:var(--text-m);}
+
     /* ── Print CSS ── */
     @media print {
       #sidebar,.tb1,.tb2,.mode-bar,.status-bar,.fr-bar,.mo,#snipDrop,#calPopup,.chrome-banner,
@@ -1391,6 +1424,7 @@
       <button class="mode-btn" data-mode="calendar" onclick="switchMode('calendar')">🗓 カレンダー</button>
       <button class="mode-btn" data-mode="slides" onclick="switchMode('slides')">📑 スライド</button>
       <button class="mode-btn" data-mode="weekly" onclick="switchMode('weekly')">📋 週報</button>
+      <button class="mode-btn" data-mode="salesman" onclick="switchMode('salesman')">🏪 販売管理</button>
     </div>
     <!-- Panes -->
     <div class="panes" id="panes">
@@ -1954,6 +1988,11 @@
       <!-- ══ Weekly Report Mode Panel ══ -->
       <div class="mode-panel" id="mp-weekly">
         <div class="ag-weekly-wrap" id="agWeeklyWrap"></div>
+      </div>
+
+      <!-- ══ 販売管理 Mode Panel ══ -->
+      <div class="mode-panel" id="mp-salesman">
+        <div class="sm-wrap" id="smWrap"></div>
       </div>
 
 <!-- ══ AI Panel ══ -->
@@ -5443,6 +5482,7 @@ function switchMode(mode){
   if(mode==='calendar') calInit();
   if(mode==='slides') slInit();
   if(mode==='weekly') agRenderWeekly();
+  if(mode==='salesman') smInit();
 }
 
 // ══════════════════════════════════════════════════════
@@ -8436,6 +8476,252 @@ function wrPrint(){
   setTimeout(function(){ pw.print(); }, 600);
 }
 
+// ══════════════════════════════════════════════════════
+// ══════════════ 販売管理 ══════════════════════════════
+// ══════════════════════════════════════════════════════
+var SM_KEY = 'md_smdata_v1';
+var smData = {};
+var smCurYear = null, smCurWeek = null;
+var smCurCrop = 'tomato';
+
+function smLoad(){
+  try { smData = JSON.parse(localStorage.getItem(SM_KEY)||'{}'); } catch(e){ smData={}; }
+}
+function smSave(){
+  localStorage.setItem(SM_KEY, JSON.stringify(smData));
+  if(typeof jsonScheduleSave==='function') jsonScheduleSave();
+}
+function smWeekKey(){ return smCurYear+'-W'+String(smCurWeek).padStart(2,'0'); }
+function smWeekLabel(){ return smCurYear+'年 第'+smCurWeek+'週'; }
+function smDates(){ return wrISOWeekDates(smCurYear, smCurWeek); }
+
+function smEnsureWeek(){
+  var k = smWeekKey();
+  if(!smData[k]) smData[k] = {tomato:[], lettuce:[]};
+  if(!smData[k].tomato) smData[k].tomato = [];
+  if(!smData[k].lettuce) smData[k].lettuce = [];
+  return smData[k];
+}
+
+function smNavWeek(dir){
+  smCurWeek += dir;
+  if(smCurWeek < 1){ smCurYear--; smCurWeek = wrISOWeeksInYear(smCurYear); }
+  if(smCurWeek > wrISOWeeksInYear(smCurYear)){ smCurYear++; smCurWeek = 1; }
+  smRender();
+}
+
+function smSwitchCrop(crop){
+  smCurCrop = crop;
+  smRender();
+}
+
+function smAddRow(){
+  var dates = smDates();
+  var row = {id: Date.now(), dest:'', productName:'', casePack:'', unitPrice:'', commission:'', qty:{}};
+  dates.forEach(function(d){ row.qty[d] = ''; });
+  smEnsureWeek()[smCurCrop].push(row);
+  smSave();
+  smRender();
+}
+
+function smDeleteRow(rowId){
+  var w = smEnsureWeek();
+  w[smCurCrop] = w[smCurCrop].filter(function(r){ return r.id !== rowId; });
+  smSave();
+  smRender();
+}
+
+function smSetField(rowId, field, val){
+  var w = smEnsureWeek();
+  var row = w[smCurCrop].find(function(r){ return r.id===rowId; });
+  if(row){ row[field]=val; smSave(); }
+}
+
+function smSetQty(rowId, date, val){
+  var w = smEnsureWeek();
+  var row = w[smCurCrop].find(function(r){ return r.id===rowId; });
+  if(row){
+    if(!row.qty) row.qty={};
+    row.qty[date]=val;
+    smSave();
+    smCalcRow(rowId);
+  }
+}
+
+function smOnPrice(rowId){
+  var w = smEnsureWeek();
+  var row = w[smCurCrop].find(function(r){ return r.id===rowId; });
+  if(!row) return;
+  var pEl=document.getElementById('smP_'+rowId), cEl=document.getElementById('smC_'+rowId), cpEl=document.getElementById('smK_'+rowId);
+  if(pEl) row.unitPrice = pEl.value;
+  if(cEl) row.commission = cEl.value;
+  if(cpEl) row.casePack = cpEl.value;
+  smSave();
+  smCalcRow(rowId);
+}
+
+function smCalcRow(rowId){
+  var w = smEnsureWeek();
+  var row = w[smCurCrop].find(function(r){ return r.id===rowId; });
+  if(!row) return;
+  var dates = smDates();
+  var tq=0;
+  dates.forEach(function(d){ tq+=parseFloat(row.qty&&row.qty[d])||0; });
+  var uP=parseFloat(row.unitPrice)||0, cm=parseFloat(row.commission)||0, cp=parseFloat(row.casePack)||1;
+  var sl=tq*cp*uP, ca=sl*cm/100, net=sl-ca;
+  var G='#2a7a2a', R='#c0392b';
+  var se=function(id,h){ var e=document.getElementById(id); if(e) e.innerHTML=h; };
+  se('smQ_'+rowId,'<b>'+tq.toFixed(1)+'</b>');
+  se('smS_'+rowId,'<span style="color:'+G+'">'+Math.round(sl).toLocaleString()+'</span>');
+  se('smCA_'+rowId,'<span style="color:'+R+'">'+Math.round(ca).toLocaleString()+'</span>');
+  se('smN_'+rowId,'<b style="color:'+(net>=0?G:R)+'">'+Math.round(net).toLocaleString()+'</b>');
+  smCalcFooter();
+}
+
+function smCalcFooter(){
+  var w = smEnsureWeek();
+  var rows = w[smCurCrop];
+  var dates = smDates();
+  var totQ=0,totS=0,totCA=0,totN=0;
+  rows.forEach(function(row){
+    var tq=0; dates.forEach(function(d){ tq+=parseFloat(row.qty&&row.qty[d])||0; });
+    var uP=parseFloat(row.unitPrice)||0,cm=parseFloat(row.commission)||0,cp=parseFloat(row.casePack)||1;
+    var sl=tq*cp*uP,ca=sl*cm/100;
+    totQ+=tq; totS+=sl; totCA+=ca; totN+=(sl-ca);
+  });
+  var G='#2a7a2a',R='#c0392b';
+  var se=function(id,h){ var e=document.getElementById(id); if(e) e.innerHTML=h; };
+  se('smFQ','<b>'+totQ.toFixed(1)+'</b>');
+  se('smFS','<b style="color:'+G+'">'+Math.round(totS).toLocaleString()+'</b>');
+  se('smFCA','<b style="color:'+R+'">'+Math.round(totCA).toLocaleString()+'</b>');
+  se('smFN','<b style="color:'+(totN>=0?G:R)+'">'+Math.round(totN).toLocaleString()+'</b>');
+}
+
+function smRender(){
+  var wrap = document.getElementById('smWrap');
+  if(!wrap) return;
+  var w = smEnsureWeek();
+  var dates = smDates();
+  var rows = w[smCurCrop];
+  var DOW = ['月','火','水','木','金','土','日'];
+  var isTom = smCurCrop==='tomato';
+  var thBg = isTom ? '#ffeaea' : '#eaffea';
+
+  // Date sub-header cells
+  var dateHdr = dates.map(function(d,i){
+    var isW=i>=5;
+    return '<th'+(isW?' style="background:rgba(100,100,200,.09)"':'')+'>'+
+      DOW[i]+'<br><span style="font-size:9px;color:var(--text-m)">'+d.slice(5).replace('-','/')+'</span></th>';
+  }).join('');
+
+  // Build body rows
+  var G='#2a7a2a', R='#c0392b';
+  var bodyRows = '';
+  rows.forEach(function(row){
+    if(!row.qty) row.qty={};
+    dates.forEach(function(d){ if(row.qty[d]===undefined) row.qty[d]=''; });
+    var tq=0; dates.forEach(function(d){ tq+=parseFloat(row.qty[d])||0; });
+    var uP=parseFloat(row.unitPrice)||0, cm=parseFloat(row.commission)||0, cp=parseFloat(row.casePack)||1;
+    var sl=tq*cp*uP, ca=sl*cm/100, net=sl-ca;
+    var qtyCells = dates.map(function(d,i){
+      var isW=i>=5;
+      return '<td'+(isW?' class="sm-weekend"':'')+'><input class="sm-in-qty" type="number" step="0.01" min="0"'+
+        ' value="'+(row.qty[d]||'')+'"'+
+        ' oninput="smSetQty('+row.id+',\''+d+'\',this.value)"'+
+        ' onchange="smSetQty('+row.id+',\''+d+'\',this.value)"></td>';
+    }).join('');
+    bodyRows +=
+      '<tr>'+
+      '<td class="sm-dest-td"><input class="sm-in" type="text" value="'+escHtml(row.dest||'')+
+        '" placeholder="販売先" onchange="smSetField('+row.id+',\'dest\',this.value)"></td>'+
+      '<td class="sm-dest-td"><input class="sm-in" type="text" value="'+escHtml(row.productName||'')+
+        '" placeholder="出荷品名" onchange="smSetField('+row.id+',\'productName\',this.value)"></td>'+
+      '<td><input class="sm-in-n" id="smK_'+row.id+'" type="number" step="1" min="0"'+
+        ' value="'+(row.casePack||'')+'" placeholder="入数"'+
+        ' oninput="smOnPrice('+row.id+')" onchange="smOnPrice('+row.id+')"></td>'+
+      '<td><input class="sm-in-n" id="smP_'+row.id+'" type="number" step="1" min="0"'+
+        ' value="'+(row.unitPrice||'')+'" placeholder="円"'+
+        ' oninput="smOnPrice('+row.id+')" onchange="smOnPrice('+row.id+')"></td>'+
+      '<td><input class="sm-in-n" id="smC_'+row.id+'" type="number" step="0.1" min="0" max="100"'+
+        ' value="'+(row.commission||'')+'" placeholder="%"'+
+        ' oninput="smOnPrice('+row.id+')" onchange="smOnPrice('+row.id+')"></td>'+
+      qtyCells+
+      '<td id="smQ_'+row.id+'"><b>'+tq.toFixed(1)+'</b></td>'+
+      '<td id="smS_'+row.id+'"><span style="color:'+G+'">'+Math.round(sl).toLocaleString()+'</span></td>'+
+      '<td id="smCA_'+row.id+'"><span style="color:'+R+'">'+Math.round(ca).toLocaleString()+'</span></td>'+
+      '<td id="smN_'+row.id+'"><b style="color:'+(net>=0?G:R)+'">'+Math.round(net).toLocaleString()+'</b></td>'+
+      '<td><button class="sm-del-btn" onclick="smDeleteRow('+row.id+')">削除</button></td>'+
+      '</tr>';
+  });
+
+  // Footer totals row
+  var totQ=0,totS=0,totCA=0,totN=0;
+  rows.forEach(function(row){
+    var tq=0; dates.forEach(function(d){ tq+=parseFloat(row.qty&&row.qty[d])||0; });
+    var uP=parseFloat(row.unitPrice)||0,cm=parseFloat(row.commission)||0,cp=parseFloat(row.casePack)||1;
+    var sl=tq*cp*uP,ca=sl*cm/100;
+    totQ+=tq; totS+=sl; totCA+=ca; totN+=(sl-ca);
+  });
+  var footRow = rows.length>0 ?
+    '<tr class="sm-total-row">'+
+    '<td colspan="5" style="text-align:right;padding-right:8px">週 合 計</td>'+
+    '<td colspan="7"></td>'+
+    '<td id="smFQ"><b>'+totQ.toFixed(1)+'</b></td>'+
+    '<td id="smFS"><b style="color:'+G+'">'+Math.round(totS).toLocaleString()+'</b></td>'+
+    '<td id="smFCA"><b style="color:'+R+'">'+Math.round(totCA).toLocaleString()+'</b></td>'+
+    '<td id="smFN"><b style="color:'+(totN>=0?G:R)+'">'+Math.round(totN).toLocaleString()+'</b></td>'+
+    '<td></td></tr>' : '';
+
+  var tableHtml = rows.length===0
+    ? '<div class="sm-empty">「＋ 行を追加」から販売先・品目を登録してください。<br>'+
+      '<span style="font-size:10px">販売単価は1週間固定で入力します。</span></div>'
+    : '<div class="sm-table-wrap"><table class="sm-table">'+
+        '<thead>'+
+          '<tr style="background:'+thBg+'">'+
+            '<th rowspan="2" style="min-width:100px">販売先</th>'+
+            '<th rowspan="2" style="min-width:90px">出荷品名</th>'+
+            '<th rowspan="2" style="min-width:50px">入数</th>'+
+            '<th rowspan="2" style="min-width:70px">販売単価<br><small style="font-weight:400">(円・週固定)</small></th>'+
+            '<th rowspan="2" style="min-width:55px">手数料<br>(%)</th>'+
+            '<th colspan="7" style="border-bottom:1px solid var(--brd)">日別出荷数量</th>'+
+            '<th rowspan="2">週計</th>'+
+            '<th rowspan="2">売上<br>(円)</th>'+
+            '<th rowspan="2">手数料<br>(円)</th>'+
+            '<th rowspan="2">純売上<br>(円)</th>'+
+            '<th rowspan="2"></th>'+
+          '</tr>'+
+          '<tr>'+dateHdr+'</tr>'+
+        '</thead>'+
+        '<tbody>'+bodyRows+footRow+'</tbody>'+
+      '</table></div>';
+
+  wrap.innerHTML =
+    '<div class="sm-nav">'+
+      '<button class="btn btn-g" onclick="smNavWeek(-1)">◀</button>'+
+      '<span class="sm-week-label">'+smWeekLabel()+'</span>'+
+      '<button class="btn btn-g" onclick="smNavWeek(1)">▶</button>'+
+      '<div style="flex:1"></div>'+
+      '<button class="sm-add-btn" onclick="smAddRow()">＋ 行を追加</button>'+
+    '</div>'+
+    '<div class="sm-tabs">'+
+      '<button class="sm-tab'+(isTom?' active':'')+'" onclick="smSwitchCrop(\'tomato\')">🍅 トマト</button>'+
+      '<button class="sm-tab'+(!isTom?' active':'')+'" onclick="smSwitchCrop(\'lettuce\')">🥬 レタス</button>'+
+    '</div>'+
+    tableHtml;
+}
+
+function smInit(){
+  if(!smCurYear){
+    var now = new Date();
+    smCurYear = now.getFullYear();
+    smCurWeek = agCmpISOWeek(now.toISOString().slice(0,10));
+  }
+  smLoad();
+  smRender();
+}
+
+// ══════════════════════════════════════════════════════
+
 function agRenderWeekly(){
   if(!wrCurYear||!wrCurWeek){
     var now=new Date();
@@ -10048,6 +10334,8 @@ async function jsonSaveAll(){
     await jsonWriteFile(dir,'memo-calendar.json', Array.isArray(icsEvents)?icsEvents:[]);
     var wr={}; try{ wr=JSON.parse(localStorage.getItem('md_wreport_v1')||'{}'); }catch(e){}
     await jsonWriteFile(dir,'memo-wreport.json', wr);
+    var sm={}; try{ sm=JSON.parse(localStorage.getItem('md_smdata_v1')||'{}'); }catch(e){}
+    await jsonWriteFile(dir,'memo-salesman.json', sm);
     var tpl=null; try{ tpl=JSON.parse(localStorage.getItem('md_templates_v1')||'null'); }catch(e){}
     if(tpl) await jsonWriteFile(dir,'memo-templates.json', tpl);
     // 統合バックアップも更新
