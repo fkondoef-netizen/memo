@@ -1390,6 +1390,7 @@
       <button class="mode-btn" data-mode="sales" onclick="switchMode('sales')">💰 収支</button>
       <button class="mode-btn" data-mode="calendar" onclick="switchMode('calendar')">🗓 カレンダー</button>
       <button class="mode-btn" data-mode="slides" onclick="switchMode('slides')">📑 スライド</button>
+      <button class="mode-btn" data-mode="weekly" onclick="switchMode('weekly')">📋 週報</button>
     </div>
     <!-- Panes -->
     <div class="panes" id="panes">
@@ -1514,7 +1515,6 @@
             <button class="ag-tab active" data-agtab="form" onclick="agSwitchTab('form')">📝 データ入力</button>
             <button class="ag-tab" data-agtab="table" onclick="agSwitchTab('table')">📋 記録一覧</button>
             <button class="ag-tab" data-agtab="chart" onclick="agSwitchTab('chart')">📈 グラフ</button>
-            <button class="ag-tab" data-agtab="weekly" onclick="agSwitchTab('weekly')">📋 週報</button>
             <button class="ag-tab" data-agtab="summary" onclick="agSwitchTab('summary')">📊 サマリー</button>
             <button class="ag-tab" data-agtab="compare" onclick="agSwitchTab('compare')">🔍 比較</button>
           </div>
@@ -1681,10 +1681,6 @@
           </div>
 
           <!-- Pane: 週集計 -->
-          <div class="ag-pane" id="agPaneWeekly">
-            <div class="ag-weekly-wrap" id="agWeeklyWrap"></div>
-          </div>
-
           <!-- Pane: サマリー -->
           <div class="ag-pane" id="agPaneSummary">
             <div class="ag-summary" id="agSummaryContent">
@@ -1953,6 +1949,11 @@
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- ══ Weekly Report Mode Panel ══ -->
+      <div class="mode-panel" id="mp-weekly">
+        <div class="ag-weekly-wrap" id="agWeeklyWrap"></div>
       </div>
 
 <!-- ══ AI Panel ══ -->
@@ -5441,6 +5442,7 @@ function switchMode(mode){
   if(mode==='sales') salInit();
   if(mode==='calendar') calInit();
   if(mode==='slides') slInit();
+  if(mode==='weekly') agRenderWeekly();
 }
 
 // ══════════════════════════════════════════════════════
@@ -6125,7 +6127,6 @@ function agSwitchTab(tab){
   if(pane) pane.classList.add('active');
   if(tab==='table') agRenderTable();
   if(tab==='chart') { agBuildLegend(); requestAnimationFrame(agDrawChart); }
-  if(tab==='weekly') agRenderWeekly();
   if(tab==='summary') agRenderSummary();
   if(tab==='compare') agCmpInit();
 }
@@ -7032,7 +7033,11 @@ function wrDraw4WeekChart(canvas, weekKeys, series, opts){
     ctx.fillText(opts.title+(opts.unit?' ('+opts.unit+')':''), PAD.l, 14);
   }
 
-  // Series lines
+  // Series lines + dots (collect labels for later collision-free drawing)
+  var _lblAll = [];
+  var _bgC = document.documentElement.getAttribute('data-theme')==='dark'?'#25262b':'#ffffff';
+  // For charts with many series, show labels only on current week (xi===3) to avoid clutter
+  var _onlyLast = series.length > 4;
   series.forEach(function(s){
     if(!s.data.some(function(v){ return v!=null; })) return;
     ctx.strokeStyle=s.color; ctx.lineWidth=2; ctx.setLineDash([]);
@@ -7043,31 +7048,46 @@ function wrDraw4WeekChart(canvas, weekKeys, series, opts){
       if(!started){ctx.moveTo(x,y);started=true;}else ctx.lineTo(x,y);
     }
     ctx.stroke();
-    // Dots + value labels (with bg box to prevent overlap)
-    var serIdx=series.indexOf(s);
+    // Dots
     for(var i=0;i<4;i++){
       if(s.data[i]==null) continue;
       var x=px(i), y=py(s.data[i]);
       ctx.beginPath(); ctx.arc(x,y,i===3?4:3,0,Math.PI*2);
       ctx.fillStyle=s.color; ctx.fill();
-      if(s.showVal!==false){
+      if(s.showVal!==false && (!_onlyLast || i===3)){
         var lv=s.data[i];
-        var lbl=lv.toFixed(lv>99?0:1);
-        // alternate above/below per series to avoid overlap
-        var yOff = (serIdx%2===0) ? -11 : 13;
-        // keep inside chart
-        if(y-11 < PAD.t) yOff = 13;
-        if(y+13 > PAD.t+cH) yOff = -11;
-        ctx.font=i===3?'bold 9px Arial':'9px Arial';
-        ctx.textAlign='center';
-        var tw=ctx.measureText(lbl).width;
-        // small bg rectangle
-        ctx.fillStyle=document.documentElement.getAttribute('data-theme')==='dark'?'#25262b':'#ffffff';
-        ctx.fillRect(x-tw/2-2, y+yOff-9, tw+4, 11);
-        ctx.fillStyle=s.color;
-        ctx.fillText(lbl, x, y+yOff);
+        _lblAll.push({xi:i, x:x, dotY:y, label:lv.toFixed(lv>99?0:1), color:s.color, bold:i===3});
       }
     }
+  });
+  // Draw labels per x-column with collision avoidance
+  [0,1,2,3].forEach(function(xi){
+    var grp=_lblAll.filter(function(l){ return l.xi===xi; });
+    if(!grp.length) return;
+    grp.sort(function(a,b){ return a.dotY-b.dotY; }); // sort top→bottom by dot y
+    var LH=12; // minimum label row height
+    // Initial positions: place label above dot
+    grp.forEach(function(l){ l.ty=l.dotY-13; });
+    // Clamp to chart top
+    grp.forEach(function(l){ if(l.ty<PAD.t+2) l.ty=PAD.t+2; });
+    // Sweep downward: push overlapping labels down
+    for(var j=1;j<grp.length;j++){
+      if(grp[j].ty < grp[j-1].ty+LH) grp[j].ty=grp[j-1].ty+LH;
+    }
+    // Sweep upward: prevent bottom overflow
+    for(var j=grp.length-2;j>=0;j--){
+      if(grp[j+1].ty-grp[j].ty < LH) grp[j].ty=grp[j+1].ty-LH;
+    }
+    // Draw each label with white bg box
+    grp.forEach(function(l){
+      ctx.font=l.bold?'bold 9px Arial':'9px Arial';
+      ctx.textAlign='center';
+      var tw=ctx.measureText(l.label).width;
+      ctx.fillStyle=_bgC;
+      ctx.fillRect(l.x-tw/2-2, l.ty-9, tw+4, 11);
+      ctx.fillStyle=l.color;
+      ctx.fillText(l.label, l.x, l.ty);
+    });
   });
 
   // Legend (bottom)
