@@ -2731,6 +2731,7 @@ function persist(){
   var si=document.getElementById('saveIndicator');
   if(si){ var now=new Date(); si.textContent='✓ '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0')+'保存'; si.style.color='var(--primary)'; }
   gdAutoBackup();
+  jsonScheduleSave();
 }
 
 // ══════════════ File System Save ══════════════
@@ -2764,6 +2765,7 @@ async function ensureDir(){
   dirHandle=await window.showDirectoryPicker({mode:'readwrite'});
   document.getElementById('sFN').textContent='☁️ '+dirHandle.name;
   localStorage.setItem('md_dir_hint', dirHandle.name+' (Google Drive)');
+  idbPut('dirHandle',dirHandle).catch(function(){});
 }
 function setSS(id,st,txt){
   const el=document.getElementById(id);
@@ -6098,6 +6100,7 @@ function agLoad(){
 function agSave(){
   localStorage.setItem(AG_KEY, JSON.stringify(agRecords));
   gdAutoBackup();
+  jsonScheduleSave();
 }
 
 function agInit(){
@@ -6168,6 +6171,7 @@ function salSave(){
     console.error('salSave error:',e);
   }
   gdAutoBackup();
+  jsonScheduleSave();
 }
 
 var salCurTab = 'form';
@@ -6798,6 +6802,7 @@ function wrLoad(){
 function wrSave(){
   localStorage.setItem(WR_KEY, JSON.stringify(wrData));
   gdAutoBackup();
+  jsonScheduleSave();
 }
 function _wrDebounce(){
   clearTimeout(_wrSaveTimer);
@@ -8448,7 +8453,7 @@ var icsEvents = [];
 (function(){
   try{ icsEvents=JSON.parse(localStorage.getItem('md_ics_events')||'[]'); }catch(e){ icsEvents=[]; }
 })();
-function saveICSEvents(){ localStorage.setItem('md_ics_events', JSON.stringify(icsEvents)); }
+function saveICSEvents(){ localStorage.setItem('md_ics_events', JSON.stringify(icsEvents)); jsonScheduleSave(); }
 function updateICSCount(){
   var el=document.getElementById('icsEventCount');
   if(el) el.textContent=icsEvents.length?'('+icsEvents.length+'件)':'';
@@ -9302,7 +9307,7 @@ function agCmpDrawPeriodCJ(){
 var _gdAutoTimer = null;
 var gdLastSaveTime = localStorage.getItem('gd_last_save') || null;
 
-// ページロード時にボタン下タイムスタンプを初期表示
+// ページロード時にボタン下タイムスタンプを初期表示 ＆ フォルダハンドル復元
 document.addEventListener('DOMContentLoaded', function(){
   var btnTime = document.getElementById('gdBtnTime');
   if(btnTime && gdLastSaveTime){
@@ -9311,6 +9316,8 @@ document.addEventListener('DOMContentLoaded', function(){
     var hh = String(d.getHours()).padStart(2,'0'), mi = String(d.getMinutes()).padStart(2,'0');
     btnTime.textContent = mm+'/'+dd+' '+hh+':'+mi;
   }
+  // IndexedDB からフォルダハンドルを復元（初回以外は自動接続）
+  restoreDirHandle().catch(function(){});
 });
 
 function gdOpenModal(){
@@ -9455,7 +9462,10 @@ async function gdConnectAndSave(){
     dirHandle = await window.showDirectoryPicker({mode:'readwrite'});
     localStorage.setItem('md_dir_hint', dirHandle.name);
     document.getElementById('sFN').textContent = '☁️ ' + dirHandle.name;
-    await gdSaveBackup();
+    await idbPut('dirHandle', dirHandle);
+    await jsonSaveAll();
+    showToast('☁️ フォルダに接続・全データJSON保存完了');
+    gdUpdateStatus();
   } catch(e){
     if(e.name !== 'AbortError') showToast('❌ ' + e.message);
   }
@@ -9463,17 +9473,9 @@ async function gdConnectAndSave(){
 
 async function gdSaveBackup(){
   try{
-    var backup = gdCollectData();
-    var json = JSON.stringify(backup, null, 2);
     if(dirHandle){
-      var fh = await dirHandle.getFileHandle('memo_backup.json', {create:true});
-      var w = await fh.createWritable();
-      await w.write(json);
-      await w.close();
-      gdLastSaveTime = backup.savedAt;
-      localStorage.setItem('gd_last_save', gdLastSaveTime);
-      gdUpdateStatus();
-      showToast('☁️ Google Drive にバックアップ完了');
+      await jsonSaveAll();
+      showToast('☁️ 全データJSON保存完了');
     } else {
       showToast('❌ フォルダが未接続です。先にフォルダを選択してください');
     }
@@ -9580,13 +9582,123 @@ function gdPickBackupFile(){
   });
 }
 
-// 自動バックアップ (データ変更後10秒でdirHandle接続中なら実行)
+// 自動バックアップ (データ変更後5秒でdirHandle接続中なら実行)
 function gdAutoBackup(){
   if(!dirHandle) return;
   clearTimeout(_gdAutoTimer);
   _gdAutoTimer = setTimeout(function(){
-    gdSaveBackup().catch(function(){});
-  }, 10000);
+    jsonSaveAll().catch(function(){});
+  }, 5000);
+}
+
+// ══════════════ IndexedDB: フォルダハンドル永続化 ══════════════
+var _idb = null;
+function idbOpen(){
+  return new Promise(function(resolve,reject){
+    var req=indexedDB.open('md_fs_handles',1);
+    req.onupgradeneeded=function(e){ e.target.result.createObjectStore('handles'); };
+    req.onsuccess=function(e){ _idb=e.target.result; resolve(_idb); };
+    req.onerror=function(){ reject(req.error); };
+  });
+}
+async function idbPut(key,val){
+  if(!_idb) await idbOpen();
+  return new Promise(function(resolve,reject){
+    var tx=_idb.transaction('handles','readwrite');
+    tx.objectStore('handles').put(val,key).onsuccess=resolve;
+    tx.onerror=reject;
+  });
+}
+async function idbGet(key){
+  if(!_idb) await idbOpen();
+  return new Promise(function(resolve){
+    var tx=_idb.transaction('handles','readonly');
+    var req=tx.objectStore('handles').get(key);
+    req.onsuccess=function(){ resolve(req.result||null); };
+    req.onerror=function(){ resolve(null); };
+  });
+}
+
+// 起動時にフォルダハンドルを復元（権限が残っていれば自動接続）
+async function restoreDirHandle(){
+  try{
+    var h=await idbGet('dirHandle');
+    if(!h) return;
+    var perm=await h.queryPermission({mode:'readwrite'});
+    if(perm==='granted'){
+      dirHandle=h;
+      var sFN=document.getElementById('sFN');
+      if(sFN) sFN.textContent='☁️ '+h.name;
+      localStorage.setItem('md_dir_hint',h.name);
+      gdUpdateStatus();
+      // 起動3秒後にサイレントで全データJSON保存
+      setTimeout(function(){ jsonSaveAll().catch(function(){}); }, 3000);
+    } else if(perm==='prompt'){
+      _pendingDirHandle=h;
+      showDirReconnectBanner(h);
+    }
+  }catch(e){ console.warn('restoreDirHandle:',e); }
+}
+
+var _pendingDirHandle=null;
+function showDirReconnectBanner(h){
+  var existing=document.getElementById('dirReconnectBanner');
+  if(existing) return;
+  var div=document.createElement('div');
+  div.id='dirReconnectBanner';
+  div.style.cssText='position:fixed;top:52px;left:50%;transform:translateX(-50%);z-index:9999;background:#1971c2;color:#fff;padding:7px 14px;border-radius:8px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.35);display:flex;align-items:center;gap:8px;';
+  div.innerHTML='<span>💾 前回のフォルダに再接続してJSONを保存</span><button style="background:#fff;color:#1971c2;border:none;border-radius:4px;padding:2px 10px;cursor:pointer;font-size:11px;font-weight:700;">接続</button><span style="cursor:pointer;margin-left:4px;opacity:.7" onclick="this.parentElement.remove()">✕</span>';
+  div.querySelector('button').onclick=async function(){
+    try{
+      var perm=await h.requestPermission({mode:'readwrite'});
+      if(perm==='granted'){
+        dirHandle=h;
+        var sFN=document.getElementById('sFN');
+        if(sFN) sFN.textContent='☁️ '+h.name;
+        gdUpdateStatus();
+        await jsonSaveAll();
+        showToast('☁️ フォルダに接続・JSON保存しました');
+        div.remove();
+      }
+    }catch(e){ showToast('❌ 接続失敗: '+e.message); }
+  };
+  document.body.appendChild(div);
+  setTimeout(function(){ if(div.parentNode) div.remove(); }, 20000);
+}
+
+// ══════════════ 個別JSONファイル保存 ══════════════
+async function jsonWriteFile(dir, filename, data){
+  var fh=await dir.getFileHandle(filename,{create:true});
+  var w=await fh.createWritable();
+  await w.write(JSON.stringify(data,null,2));
+  await w.close();
+}
+
+var _jsonSaveTimer=null;
+function jsonScheduleSave(){
+  clearTimeout(_jsonSaveTimer);
+  _jsonSaveTimer=setTimeout(function(){ jsonSaveAll().catch(function(){}); }, 4000);
+}
+
+async function jsonSaveAll(){
+  var dir=dirHandle;
+  if(!dir) return;
+  try{
+    // 個別データファイル
+    await jsonWriteFile(dir,'memo-notes.json', Array.isArray(notes)?notes:[]);
+    await jsonWriteFile(dir,'memo-agdata.json', Array.isArray(agRecords)?agRecords:[]);
+    await jsonWriteFile(dir,'memo-salesdata.json', Array.isArray(salesData)?salesData:[]);
+    await jsonWriteFile(dir,'memo-calendar.json', Array.isArray(icsEvents)?icsEvents:[]);
+    var wr={}; try{ wr=JSON.parse(localStorage.getItem('md_wreport_v1')||'{}'); }catch(e){}
+    await jsonWriteFile(dir,'memo-wreport.json', wr);
+    var tpl=null; try{ tpl=JSON.parse(localStorage.getItem('md_templates_v1')||'null'); }catch(e){}
+    if(tpl) await jsonWriteFile(dir,'memo-templates.json', tpl);
+    // 統合バックアップも更新
+    await jsonWriteFile(dir,'memo_backup.json', gdCollectData());
+    gdLastSaveTime=new Date().toISOString();
+    localStorage.setItem('gd_last_save',gdLastSaveTime);
+    gdUpdateStatus();
+  }catch(e){ console.warn('jsonSaveAll error:',e); }
 }
 
 // ══════════════ Ag Data File Import ══════════════
