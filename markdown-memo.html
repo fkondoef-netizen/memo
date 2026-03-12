@@ -10106,6 +10106,9 @@ async function gdConnectAndSave(){
     localStorage.setItem('md_dir_hint', dirHandle.name);
     document.getElementById('sFN').textContent = '☁️ ' + dirHandle.name;
     await idbPut('dirHandle', dirHandle);
+    // 既存のjson/フォルダがあればデータを読み込む
+    var loaded = await jsonLoadAll(dirHandle);
+    if(loaded){ renderList(); showToast('📂 既存JSONデータを読み込み済み。保存中…'); }
     await jsonSaveAll();
     showToast('☁️ フォルダに接続・全データJSON保存完了');
     gdUpdateStatus();
@@ -10139,14 +10142,23 @@ async function gdLoadBackup(){
     var json;
     if(dirHandle){
       try{
-        var fh = await dirHandle.getFileHandle('memo_backup.json');
+        // json/ サブフォルダを優先して確認
+        var jsonDir = await dirHandle.getDirectoryHandle('json');
+        var fh = await jsonDir.getFileHandle('memo_backup.json');
         var file = await fh.getFile();
         json = await file.text();
-      } catch(e){
-        // フォルダにない場合はファイル選択へ
-        showToast('フォルダ内にバックアップが見つかりません。ファイルを選択してください');
-        json = await gdPickBackupFile();
-        if(!json) return;
+      } catch(e1){
+        try{
+          // 後方互換: ルートに保存されているバックアップも確認
+          var fh = await dirHandle.getFileHandle('memo_backup.json');
+          var file = await fh.getFile();
+          json = await file.text();
+        } catch(e2){
+          // フォルダにない場合はファイル選択へ
+          showToast('フォルダ内にバックアップが見つかりません。ファイルを選択してください');
+          json = await gdPickBackupFile();
+          if(!json) return;
+        }
       }
     } else {
       json = await gdPickBackupFile();
@@ -10273,6 +10285,9 @@ async function restoreDirHandle(){
       var sFN=document.getElementById('sFN');
       if(sFN) sFN.textContent='☁️ '+h.name;
       localStorage.setItem('md_dir_hint',h.name);
+      // JSONフォルダから最新データをロード
+      var loaded = await jsonLoadAll(h);
+      if(loaded){ renderList(); }
       gdUpdateStatus();
       // 起動3秒後にサイレントで全データJSON保存
       setTimeout(function(){ jsonSaveAll().catch(function(){}); }, 3000);
@@ -10299,8 +10314,10 @@ function showDirReconnectBanner(h){
         var sFN=document.getElementById('sFN');
         if(sFN) sFN.textContent='☁️ '+h.name;
         gdUpdateStatus();
+        var loaded = await jsonLoadAll(h);
+        if(loaded){ renderList(); showToast('📂 JSONから最新データを読み込みました'); }
         await jsonSaveAll();
-        showToast('☁️ フォルダに接続・JSON保存しました');
+        if(!loaded) showToast('☁️ フォルダに接続・JSON保存しました');
         div.remove();
       }
     }catch(e){ showToast('❌ 接続失敗: '+e.message); }
@@ -10310,11 +10327,46 @@ function showDirReconnectBanner(h){
 }
 
 // ══════════════ 個別JSONファイル保存 ══════════════
+async function _getJsonDir(dir){
+  return await dir.getDirectoryHandle('json',{create:true});
+}
 async function jsonWriteFile(dir, filename, data){
-  var fh=await dir.getFileHandle(filename,{create:true});
+  var jsonDir = await _getJsonDir(dir);
+  var fh=await jsonDir.getFileHandle(filename,{create:true});
   var w=await fh.createWritable();
   await w.write(JSON.stringify(data,null,2));
   await w.close();
+}
+
+// ══════════════ JSON一括ロード（起動時・再接続時） ══════════════
+async function jsonLoadAll(dir){
+  try{
+    var jsonDir;
+    try{ jsonDir = await dir.getDirectoryHandle('json'); }
+    catch(e){ return false; } // json/ フォルダがなければスキップ
+    async function readJson(name, fallback){
+      try{
+        var fh=await jsonDir.getFileHandle(name);
+        var f=await fh.getFile();
+        return JSON.parse(await f.text());
+      }catch(e){ return fallback; }
+    }
+    var n = await readJson('memo-notes.json', null);
+    if(n && Array.isArray(n)){ notes=n; localStorage.setItem('md_notes_v3',JSON.stringify(notes)); }
+    var ag = await readJson('memo-agdata.json', null);
+    if(ag && Array.isArray(ag)){ agRecords=ag; localStorage.setItem('md_agdata_v1',JSON.stringify(agRecords)); }
+    var sd = await readJson('memo-salesdata.json', null);
+    if(sd && Array.isArray(sd)){ salesData=sd; localStorage.setItem('md_salesdata_v1',JSON.stringify(salesData)); }
+    var cal = await readJson('memo-calendar.json', null);
+    if(cal && Array.isArray(cal)){ icsEvents=cal; localStorage.setItem('md_ics_events',JSON.stringify(icsEvents)); }
+    var wr = await readJson('memo-wreport.json', null);
+    if(wr && typeof wr==='object'){ wrData=wr; localStorage.setItem(WR_KEY,JSON.stringify(wrData)); }
+    var sm = await readJson('memo-salesman.json', null);
+    if(sm && typeof sm==='object'){ smData=sm; localStorage.setItem(SM_KEY,JSON.stringify(smData)); }
+    var tpl = await readJson('memo-templates.json', null);
+    if(tpl){ localStorage.setItem('md_templates_v1',JSON.stringify(tpl)); }
+    return true;
+  }catch(e){ console.warn('jsonLoadAll error:',e); return false; }
 }
 
 var _jsonSaveTimer=null;
