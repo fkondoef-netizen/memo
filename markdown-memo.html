@@ -7488,13 +7488,13 @@ function wrRender(){
       var tomGP=(r.tomSales||0)-tL-tO;
       var letGP=(r.letSales||0)-lL-lO;
       var gp=tomGP+letGP;
-      totTomH+=r.tomHarv||0; totLetS+=r.letShip||0;
+      totTomH+=r.tomHarv||0; totLetS+=(r.letShip||0)/12;
       totTomSal+=r.tomSales||0; totLetSal+=r.letSales||0;
       totTomL+=tL; totTomO+=tO; totLetL+=lL; totLetO+=lO;
       totTomGP+=tomGP; totLetGP+=letGP; totGP+=gp;
       rows+='<tr'+(i>=5?' style="background:var(--surface2)"':'')+'><td>'+dow+'<br><small style="color:var(--text-m)">'+dt.slice(5).replace('-','/')+'</small></td>'+
         '<td>'+fmt1(r.tomHarv)+'</td>'+
-        '<td>'+fmt1(r.letShip)+'</td>'+
+        '<td>'+(r.letShip!=null?fmt1(r.letShip/12):'—')+'</td>'+
         '<td>'+(r.tomSales!=null?r.tomSales.toLocaleString():'—')+'</td>'+
         '<td style="color:var(--text-m)">'+(tL?tL.toLocaleString():'—')+'</td>'+
         '<td style="color:var(--text-m)">'+(tO?tO.toLocaleString():'—')+'</td>'+
@@ -8112,7 +8112,7 @@ function wrExportPptx(){
     var label = dt.slice(5).replace('-','/') + '(' + dow + ')';
     if(!rec) return {label:label, tH:'—', lS:'—', tSal:'—', lSal:'—', tGr:'—', lGr:'—', tot:'—', hasData:false};
     var tH   = parseFloat(rec.tomHarv)||0;
-    var lS   = parseFloat(rec.letShip)||0;
+    var lS   = (parseFloat(rec.letShip)||0)/12;
     var tSal = parseFloat(rec.tomSales)||0;
     var lSal = parseFloat(rec.letSales)||0;
     var tGr  = tSal - (parseFloat(rec.tomLabor)||0) - (parseFloat(rec.tomOther)||0);
@@ -8430,12 +8430,12 @@ function wrPrint(){
         var tomGP=(r.tomSales||0)-tL-tO;
         var letGP=(r.letSales||0)-lL-lO;
         var gp=tomGP+letGP;
-        totTomH+=r.tomHarv||0;totLetS+=r.letShip||0;
+        totTomH+=r.tomHarv||0;totLetS+=(r.letShip||0)/12;
         totTomSal+=r.tomSales||0;totLetSal+=r.letSales||0;
         totTomL+=tL;totTomO+=tO;totLetL+=lL;totLetO+=lO;
         totTomGP+=tomGP;totLetGP+=letGP;totGP+=gp;
         rows+='<tr'+(i>=5?' style="background:#f5f0ff"':'')+'><td>'+dow+' '+dt.slice(5).replace('-','/')+'</td>'+
-          '<td>'+fmt1(r.tomHarv)+'</td><td>'+fmt1(r.letShip)+'</td>'+
+          '<td>'+fmt1(r.tomHarv)+'</td><td>'+(r.letShip!=null?fmt1(r.letShip/12):'—')+'</td>'+
           '<td>'+(r.tomSales!=null?r.tomSales.toLocaleString():'—')+'</td>'+
           '<td style="color:#777">'+(tL?tL.toLocaleString():'—')+'</td>'+
           '<td style="color:#777">'+(tO?tO.toLocaleString():'—')+'</td>'+
@@ -10289,8 +10289,8 @@ async function restoreDirHandle(){
       var loaded = await jsonLoadAll(h);
       if(loaded){ renderList(); }
       gdUpdateStatus();
-      // 起動3秒後にサイレントで全データJSON保存
-      setTimeout(function(){ jsonSaveAll().catch(function(){}); }, 3000);
+      // 即時JSON保存（json/ サブフォルダを確実に作成）
+      jsonSaveAll().catch(function(){});
     } else if(perm==='prompt'){
       _pendingDirHandle=h;
       showDirReconnectBanner(h);
