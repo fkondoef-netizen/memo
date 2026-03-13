@@ -991,6 +991,51 @@
       border:2px dashed var(--brd);border-radius:8px;margin-top:8px;}
     .sm-group-hd{padding:4px 6px;font-size:10px;font-weight:700;letter-spacing:.5px;
       background:var(--surface3);border-bottom:1px solid var(--brd);color:var(--text-m);}
+    /* 販売管理 top mode tabs */
+    .sm-top-tabs{display:flex;gap:2px;padding:6px 0;border-bottom:2px solid var(--brd);margin-bottom:6px;}
+    .sm-top-tab{padding:6px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:700;
+      color:var(--text-m);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;}
+    .sm-top-tab.active{color:var(--primary);border-bottom-color:var(--primary);background:var(--surface2);border-radius:4px 4px 0 0;}
+    /* 分析タブ */
+    .sma-wrap{padding:4px 0;}
+    .sma-year-nav{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+    .sma-cards{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+    .sma-card{background:var(--surface2);border-radius:8px;padding:10px 16px;min-width:130px;flex:1;border:1px solid var(--brd);}
+    .sma-card-title{font-size:10px;color:var(--text-m);margin-bottom:3px;}
+    .sma-card-val{font-size:18px;font-weight:700;}
+    .sma-card-sub{font-size:10px;color:var(--text-m);margin-top:2px;}
+    .sma-section{margin-bottom:14px;}
+    .sma-section-hd{font-size:12px;font-weight:700;padding:5px 8px;background:var(--surface3);
+      border-left:3px solid var(--primary);margin-bottom:6px;border-radius:0 4px 4px 0;}
+    .sma-table{border-collapse:collapse;width:100%;font-size:11px;}
+    .sma-table th{background:var(--surface3);padding:5px 8px;border:1px solid var(--brd);white-space:nowrap;text-align:center;}
+    .sma-table td{padding:4px 8px;border:1px solid var(--brd);text-align:right;}
+    .sma-table td.label{text-align:left;font-weight:600;}
+    .sma-table tr.total-row td{background:var(--surface2);font-weight:700;}
+    /* 単価タブ */
+    .smp-wrap{padding:4px 0;}
+    .smp-toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;}
+    .smp-search{border:1px solid var(--brd);border-radius:4px;padding:4px 8px;font-size:12px;
+      background:var(--surface1);color:var(--text);width:200px;}
+    .smp-cat-btn{padding:3px 10px;border:1px solid var(--brd);border-radius:12px;cursor:pointer;
+      font-size:10px;background:var(--surface2);color:var(--text-m);}
+    .smp-cat-btn.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+    .smp-table-wrap{overflow-x:auto;}
+    .smp-table{border-collapse:collapse;width:100%;font-size:11px;min-width:500px;}
+    .smp-table th{background:var(--surface3);padding:5px 8px;border:1px solid var(--brd);
+      white-space:nowrap;text-align:center;position:sticky;top:0;z-index:1;}
+    .smp-table td{padding:3px 6px;border:1px solid var(--brd);}
+    .smp-table tr:hover td{background:rgba(var(--primary-rgb),.04);}
+    .smp-cat-hd td{background:var(--surface3);font-weight:700;font-size:11px;
+      color:var(--primary);padding:5px 8px;letter-spacing:.3px;}
+    .smp-in{border:none;background:transparent;width:100%;font-size:11px;color:var(--text);
+      padding:1px 2px;text-align:right;}
+    .smp-in:focus{background:var(--surface2);outline:1px solid var(--primary);border-radius:2px;}
+    .smp-in.label{text-align:left;}
+    .smp-add-btn{background:var(--primary);color:#fff;border:none;border-radius:4px;
+      padding:4px 12px;cursor:pointer;font-size:11px;font-weight:600;}
+    .smp-del-btn{background:none;border:none;cursor:pointer;color:#c92a2a;font-size:13px;padding:0 4px;}
+    .smp-note{font-size:10px;color:var(--text-m);text-align:right;margin-top:4px;}
 
     /* ── Print CSS ── */
     @media print {
@@ -8600,6 +8645,8 @@ function smCalcFooter(){
 function smRender(){
   var wrap = document.getElementById('smWrap');
   if(!wrap) return;
+  if(smCurMode==='analysis') return smRenderAnalysisView(wrap);
+  if(smCurMode==='prices') return smRenderPricesView(wrap);
   var w = smEnsureWeek();
   var dates = smDates();
   var rows = w[smCurCrop];
@@ -8696,6 +8743,7 @@ function smRender(){
       '</table></div>';
 
   wrap.innerHTML =
+    smModeBar()+
     '<div class="sm-nav">'+
       '<button class="btn btn-g" onclick="smNavWeek(-1)">◀</button>'+
       '<span class="sm-week-label">'+smWeekLabel()+'</span>'+
@@ -8717,7 +8765,247 @@ function smInit(){
     smCurWeek = agCmpISOWeek(now.toISOString().slice(0,10));
   }
   smLoad();
+  smPricesLoad();
   smRender();
+}
+
+// ══════════════════════════════════════════════════════
+// 販売管理 マルチモード（分析・単価一覧）
+// ══════════════════════════════════════════════════════
+var smCurMode = 'weekly';
+var smAnalysisYear = new Date().getFullYear();
+var smAnalysisCrop = 'tomato';
+var SM_PRICES_KEY = 'md_smprices_v1';
+var smPrices = null;
+var smPriceCatFilter = '';
+var smPriceSearch = '';
+var SM_PRICES_DEFAULT = [["ダンボール","サラトリオ_12入",47.5,"セッツ"],["ダンボール","サラトリオ_12入_1",48.0,"サクラ"],["ダンボール","サラトリオ_12入(A式)",50.0,""],["ダンボール","サラトリオ_12入(無地)",47.5,""],["ダンボール","ロメイン_6入",30.0,""],["ダンボール","ロメイン_6入(無地)",30.0,""],["ダンボール","トップバリュ_３種のレタス",47.5,"セッツ"],["ダンボール","H＆B _リーフレタス12入り",47.5,"セッツ"],["トレイ・パック","リーフレタス３種コストコ_パット",4.7,"セッツ"],["ダンボール","リーフレタス３種コストコ_ケース",170.0,"セッツ"],["ダンボール","サラダボウル向け_リーフレタス12入り",47.5,"セッツ"],["ダンボール","MVパック24入用箱",103.0,""],["ラベル・シール","トップシールカップトール蓋",11.5,""],["ラベル・シール","トップシールカップトール身",56.0,""],["ダンボール","プラムトマト3㎏バルク詰め",29.5,""],["フタ・リッド","ミニトマト3㎏フタ",9.0,""],["ダンボール","ミニとまと3kg箱",29.5,""],["ダンボール","ミニとまと2kg箱",30.0,""],["フタ・リッド","ミニとまと2kgフタ",9.8,""],["ダンボール","プラムトマトShort箱",29.5,""],["フタ・リッド","プラムトマトShort蓋",9.5,""],["フタ・リッド","Shallowリッド箱",32.5,""],["ダンボール","アンジェレトマト5kg箱",73.0,""],["ダンボール","アンジェレトマト120g専用箱",118.0,""],["ダンボール","アンジェレトマト150g専用箱",118.0,""],["ダンボール","アンジェレトマト250g専用箱",126.0,""],["袋・フィルム","サラトリオ袋",4.7,""],["袋・フィルム","ジュニアリーフ袋",4.5,""],["袋・フィルム","ロメインコンビ袋",5.2,""],["トレイ・パック","APクリアルーフS9H",8.95,""],["トレイ・パック","バイオつみたてM130パイ44穴10",11.4,""],["トレイ・パック","バイオつみたてM130パイ62穴10",15.7,""],["トレイ・パック","バイオタッチパック",6.2,""],["トレイ・パック","VA30R(改)透明",6.2,""],["トレイ・パック","VF150AP4H",6.54,""],["トレイ・パック","VF310浅4HBLW3_2C",14.65,""],["トレイ・パック","プラムトマト(Short)",4.6,""],["フタ・リッド","プラムトマト蓋(Short)",3.75,""],["トレイ・パック","プラムトマト(Tall)",7.75,""],["フタ・リッド","プラムトマト蓋(Tall)",3.75,""],["フタ・リッド","トレイ用リッド",6.45,""],["トレイ・パック","シャロートレイ",4.85,""],["袋・フィルム","TV袋",7.1,""],["袋・フィルム","原信レタス袋",5.68,""],["袋・フィルム","無地レタス袋",5.5,""],["袋・フィルム","トップバリュ_３種のレタス袋",7.1,"コバヤシ"],["袋・フィルム","ロメイン無地袋＃30",0.0,""],["袋・フィルム","サンチュ三角袋(プラマーク印字)＃30",5.17,""],["袋・フィルム","無地ﾛﾒｲﾝﾚﾀｽ袋ﾌﾞﾛｯｸｼｰﾙ50枚",4.48,""],["袋・フィルム","H&Bレタス袋",5.53,""],["袋・フィルム","ロメインレタス袋５色",7.81,""],["袋・フィルム","レタスフィルム光電管マーク1色",13900.0,""],["袋・フィルム","天然水のサラダ３種_新潟県産",5.56,""],["袋・フィルム","外袋レタス３個用チャック袋",33.7,""],["袋・フィルム","無地レタス袋_＃30プラ印字",4.45,""],["袋・フィルム","H&Bレタス袋OPP防曇＃30２色",4.95,""],["ラベル・シール","JANシール",4.3,""],["ラベル・シール","ラベルミックスレタス",2.0,""],["ラベル・シール","HBプレミアム楕円60_40",0.88,""],["ラベル・シール","HBプレミアム楕円70_50下883",0.88,""],["ラベル・シール","HBプレミアム楕円70_50下947",0.8,""],["ラベル・シール","MV向けHBプレミアム110_40",1.17,""],["ラベル・シール","全農150gラベル",2.49,""],["ラベル・シール","SARAShortラベル",1.65,""],["ラベル・シール","SARAShallow赤ラベル",1.9,""],["ラベル・シール","SARAShallowMixラベル",1.8,""],["ラベル・シール","フラガールラベル",1.02,""],["ラベル・シール","クランチールビーラベル",2.5,""],["ラベル・シール","ラベルサラダ春菊16面",4.6,""],["ラベル・シール","ラベルロメインレタス65パイ",1.8,""],["ラベル・シール","サンチュラベル２色70×49ｍｍ",1.6,""],["ラベル・シール","3種のレタスラベル２色70×49ｍｍ",1.3,""],["ラベル・シール","サラダ春菊ラベル２色70×49ｍｍ",1.85,""],["ラベル・シール","天然水のサラダラベル60×100ｍｍ３色",2.2,""],["ラベル・シール","Oisixサーマルラベル",16.5,""],["ラベル・シール","ラベルおうちで収穫サラダ",2.8,""],["ラベル・シール","春菊ラベル２色_70×49ｍｍ",1.1,""],["ラベル・シール","マルエツ グリーンリーフラベル２色",2.95,""],["消耗品","プラスチックエプロン50枚入",340.0,""],["消耗品","モブキャップ2000枚入",11600.0,""],["消耗品","Jコール75",1740.0,""],["消耗品","キッチンハイター",1050.0,""],["消耗品","シャボネット5kg",3850.0,""],["消耗品","SK黄バンド12×3000m",3950.0,""],["消耗品","オーラック12%20K",2280.0,""],["消耗品","SJCストレッチレッドケース",980.0,""],["消耗品","PHセンサー",34000.0,""],["消耗品","葉かきカッター本体",1820.0,""],["消耗品","葉かきカッター用替刃10枚入り",680.0,""],["消耗品","ニトリル手袋",600.0,""],["消耗品","LPG1月",114.0,""],["消耗品","LPG2月",116.7,""],["消耗品","LPG3月",117.6,""],["消耗品","誘引紐9000m",7200.0,""],["消耗品","誘引フック",25.0,""],["消耗品","アマノール15kg",7000.0,""],["消耗品","ダイヤスストレッチエアー",1700.0,""],["消耗品","寺田ポンプ",43500.0,""],["消耗品","ラクソス補修テープ",6190.0,""],["消耗品","エースロンテープ",458.0,""],["消耗品","モノタロウ",1.0,""],["消耗品","コメリ",1.0,""],["消耗品","ウエルシア",1.0,""],["消耗品","amazon",1.0,""],["消耗品","楽天",1.0,""],["消耗品","ホームセンタームサシ",1.0,""],["消耗品","ダイレックス",1.0,""],["消耗品","ダイソー",100.0,""],["消耗品","セリア",100.0,""],["消耗品","ハードオフ",1.0,""],["消耗品","セブンイレブン",1.0,""],["消耗品","ひらせいホームセンター",1.0,""],["消耗品","アオキ",1.0,""],["消耗品","富士薬品",1.0,""],["消耗品","篠原染工",1.0,""],["消耗品","なんじゃ村",1.0,""],["消耗品","Can・Do",1.0,""],["消耗品","知遊堂",1.0,""],["消耗品","製函機テープ",7920.0,""],["消耗品","パイロンラベル_無地",58.0,""],["消耗品","ラベル_208ー1_白無地_強粘",200.0,""],["消耗品","名刺",1800.0,""],["消耗品","Qヒート15kg",19700.0,""],["消耗品","リムービット",15600.0,""],["消耗品","遮熱剤除去工事費",18.0,""],["消耗品","遮熱剤塗布工事費",20.0,""],["消耗品","機器諸経費",50000.0,""],["消耗品","ReduHeat",17800.0,""],["消耗品","過酸化水素水",4700.0,""],["交際・接待","食事",1.0,""],["消耗品","材料費",1.0,""],["交際・接待","飲み物",1.0,""],["交際・接待","お土産",1.0,""],["交際・接待","駐車料金",2.0,""],["出張費","交通費",1.0,""],["配送運賃","配送費",1.0,""],["出張費","宿泊費",1.0,""],["出張費","食事代",1.0,""],["電気代","電気代",1.0,""],["通信費","郵便",110.0,""],["配送運賃","送料",1.0,""],["通関料","通関手続",1.0,""],["車両代","住吉工房",1.0,""],["消耗品","コンタクトブロック赤",566.0,""],["消耗品","コンタクトブロック緑",548.0,""],["消耗品","ロールトラップ30cm*100m",8510.0,""],["消耗品","防毒マスク_G7-06型",2000.0,""],["消耗品","防毒マスク吸収缶(酸性ガス用)",400.0,""],["消耗品","ノズルASCYN16/S",82000.0,""],["消耗品","ツメ",1850.0,""],["消耗品","軸受まとめ",410.0,""],["消耗品","ローラーチェーン組み立て",5300.0,""],["消耗品","ナピアラセン",14800.0,""],["消耗品","特注両出18頭口",65000.0,""],["消耗品","ポリレート20kg缶",60000.0,""],["消耗品","トマト棟",20000.0,""],["消耗品","コンパクトボールバルブ",750.0,""],["消耗品","カードトラップブラック10*25",670.0,""],["消耗品","ノズルフンカンASY",31500.0,""],["消耗品","ティッシュ200Ｗ_5Ｐ",410.0,""],["消耗品","ロールトラップ・イエロー_15㎝×100m",5290.0,""],["消耗品","バグスキャン_ドライ2020イエロー",800.0,""],["消耗品","サワフロートM-30",9120.0,""],["消耗品","バイオシスOP-2_10㎏入",91000.0,""],["消耗品","害虫捕獲粘着ロール",2600.0,""],["消耗品","観測用捕虫シート",30.4,""],["消耗品","ローラー式フック",77.6,""],["消耗品","防虫ネット",3000.0,""],["消耗品","輸入関税等",0.0,""],["消耗品","フジニトリル手袋",550.0,""],["消耗品","ラベラー",1.0,""],["消耗品","コストコ様パレットレンタルチャージ",1.0,""],["消耗品","コストコ様パレット発行料",350.0,""],["消耗品","製函機修理",1.0,""],["肥料費","硫酸銅_20kg",15000.0,""],["肥料費","モリブデン酸ナトリウム_1kg",6000.0,""],["肥料費","DTPAキレート鉄11％_25kg",38000.0,""],["肥料費","ほう酸_25kg",9800.0,""],["肥料費","硫酸マンガン_25kg",6800.0,""],["肥料費","硫酸亜鉛_20kg",11000.0,""],["肥料費","硝酸液_20kg",4300.0,""],["肥料費","塩化カリウム_25kg",3100.0,""],["肥料費","リン酸カリウム_20kg",5900.0,""],["肥料費","硫酸マグネシウム_20kg",1280.0,""],["肥料費","硫酸カリウム_25kg",5200.0,""],["肥料費","カネヤマM5号_1kg",37000.0,""],["肥料費","硝酸カルシウム_25kg",2000.0,""],["肥料費","硫酸アンモニウム_25kg",12000.0,""],["肥料費","硝酸カリウム_25kg",5400.0,""],["肥料費","塩化カルシウム_25kg",2570.0,""],["肥料費","粒状硝酸カリウム_20kg",4320.0,""],["肥料費","硫酸カリウム_9.5kg",1600.0,""],["肥料費","第一リン酸カリ_20kg",5900.0,""],["肥料費","塩化加里_粉(有機JAS)_20Kg",3100.0,""],["肥料費","硝酸カルシウム4水塩_20Kg",1600.0,""],["肥料費","塩化カリウム_9.5kg",1300.0,""],["肥料費","硝酸カリ(粒状品)_20㎏",4320.0,""],["減価償却費","減価償却費(トマト)",5500000.0,""],["減価償却費","減価償却費(レタス)",13200000.0,""],["種苗費","ヒカリオ",3.7,""],["種苗費","シディオ",3.9,""],["種苗費","ニーノ",4.6,""],["種苗費","クック",4.275,""],["種苗費","エクステンプ",4.275,""],["種苗費","ソドス",4.65,""],["種苗費","ラベージョ",3.42,"R7.10月まで￥3.33"],["種苗費","アレイン",3.42,"R7.10月まで￥3.33"],["種苗費","アンジェレ",111.88,""],["種苗費","アンジェレ×カルディア",195.0,""],["種苗費","フラガール×カルディア",240.0,""],["種苗費","スウィッテレ×カルディア",197.0,""],["種苗費","ダルタリー×カルディア",197.0,""],["種苗費","ネブラ×カルディア",197.0,""],["種苗費","ダルタリー100粒",8835.0,""],["種苗費","カルディア",15.84,""],["種苗費","スウィッテレ100粒",14070.0,""],["種苗費","ネビュラ100粒",20000.0,""],["種苗費","サドリオ",4.2,""],["種苗費","ロロピオ",4.0,""],["種苗費","エスタ",4.0,""],["種苗費","ｱﾊﾟｯﾁSｺｰﾄ_株張中葉春菊NW",0.264,""],["種苗費","パシフィケーション",2.16,""],["種苗費","春菊",0.17728,"R7.9月まで￥0.15396"],["種苗費","サトゥルダイ",3.78,""],["種苗費","グリーンアイドル",4.0,"R7.10月まで￥5.10"],["種苗費","ケール コボルト",5.0,""],["種苗費","キュリオ",4.2,""],["種苗費","ロロピエール",4.0,""],["パートタイム","1月トマト",3611646.0,""],["パートタイム","1月レタス",2095517.0,""],["パートタイム","2月トマト",5256117.0,""],["パートタイム","2月レタス",2314696.0,""],["農薬費","ハニートーン",18000.0,"値上げ"],["農薬費","ケミクロンG",715.0,"販売終了"],["農薬費","Zボルドー水和剤 500g",840.0,""],["農薬費","アニキ乳剤 500ml",10800.0,""],["農薬費","アーデント水和剤 500ml",4370.0,""],["農薬費","アファーム乳剤 500ml",9888.0,""],["農薬費","アファーム乳剤 250ml",5570.0,""],["農薬費","アフェットフロアブル 100ml",1600.0,""],["農薬費","インプレッションクリア 500ml",5181.0,""],["農薬費","ウララDF 500ml",4260.0,""],["農薬費","エスレル10 100ml",2470.0,""],["農薬費","カスケード乳剤",4510.0,""],["農薬費","カリグリーン水溶剤 500ml",1780.0,""],["農薬費","カッパーシン水和剤 500ml",2420.0,""],["農薬費","カンタスドライフロアブル 100ml",1650.0,""],["農薬費","クリアザールフロアブル 100ml",2500.0,""],["農薬費","グレーシア乳剤 250ml",4800.0,""],["農薬費","ゲッター水和剤 500ml",6910.0,""],["農薬費","ケミヘル水和剤 100g*50",1550.0,""],["農薬費","コルト顆粒水和剤 500g",6390.0,""],["農薬費","コロマイト乳剤 500ml",4320.0,""],["農薬費","サフオイル乳剤 1L",2680.0,""],["農薬費","シグナムWDG 333g",3451.0,""],["農薬費","スピノエース顆粒水和剤 100g",4281.0,""],["農薬費","ダコニール1000 250ml",940.0,""],["農薬費","ダントツ水溶剤 250g",2609.0,""],["農薬費","チェス顆粒水和剤 100g",2160.0,""],["農薬費","ディアナSC",2300.0,""],["農薬費","トップジンM水和剤 500g",2260.0,""],["農薬費","トランスフォームフロアブル 250ml",2170.0,""],["農薬費","ニマイバー水和剤 500g",7580.0,""],["農薬費","パレード20フロアブル 250ml",5730.0,""],["農薬費","ファンタジスタ顆粒水和剤 500g",9860.0,""],["農薬費","ベルクート水和剤 100g",750.0,""],["農薬費","ベンレート水和剤 500g",4470.0,""],["農薬費","マッチ乳剤 500ml",5088.0,""],["農薬費","ムシラップ 1L",3140.0,""],["農薬費","モスピラン顆粒水溶剤 250g",3730.0,""],["農薬費","モスピラン粒剤 1kg",1980.0,""],["農薬費","モベントフロアブル 100ml",1600.0,""],["農薬費","ランマンフロアブル 500ml",4860.0,""],["農薬費","ロブラール水和剤 500g",4153.0,""],["農薬費","トマトトーン 20ml",180.0,""],["農薬費","ホライズンドライフロアブル",2910.0,""],["農薬費","グレーシア乳剤 500ml",9070.0,""],["農薬費","ベストガード水溶剤 500g",4030.0,""],["農薬費","養液分析",6600.0,""],["農薬費","ナチュポールブラック",17500.0,""],["農薬費","カナメフロアブル 125ml",3160.0,""],["農薬費","ドライバー 500ml",1570.0,""],["農薬費","ゼンターリ顆粒水和剤 500g",4610.0,""],["農薬費","アグリトップクロマルDX",17500.0,""],["農薬費","ベネビアDD 500ml",10680.0,""],["農薬費","フセキワイドフロアブル 500ml",6550.0,""],["農薬費","プレオフロアブル 500ml",3727.0,""]];
+
+function smPricesLoad(){
+  try{ smPrices=JSON.parse(localStorage.getItem(SM_PRICES_KEY)||'null'); }catch(e){ smPrices=null; }
+  if(!smPrices||!Array.isArray(smPrices.items)){
+    smPrices={items:SM_PRICES_DEFAULT.map(function(r,i){
+      return {id:i+1,cat:r[0],name:r[1],price:r[2],supplier:r[3]};
+    })};
+    localStorage.setItem(SM_PRICES_KEY,JSON.stringify(smPrices));
+  }
+}
+function smPricesSave(){
+  localStorage.setItem(SM_PRICES_KEY,JSON.stringify(smPrices));
+  jsonScheduleSave();
+}
+function smSwitchMode(mode){
+  smCurMode=mode;
+  smRender();
+}
+function smModeBar(){
+  return '<div class="sm-top-tabs">'+
+    '<button class="sm-top-tab'+(smCurMode==='weekly'?' active':'')+'" onclick="smSwitchMode(\'weekly\')">📅 週次管理</button>'+
+    '<button class="sm-top-tab'+(smCurMode==='analysis'?' active':'')+'" onclick="smSwitchMode(\'analysis\')">📊 分析</button>'+
+    '<button class="sm-top-tab'+(smCurMode==='prices'?' active':'')+'" onclick="smSwitchMode(\'prices\')">💴 単価一覧</button>'+
+    '</div>';
+}
+function smPriceAddRow(){
+  if(!smPrices) smPricesLoad();
+  var newId = Date.now();
+  smPrices.items.push({id:newId,cat:smPriceCatFilter||'',name:'',price:'',supplier:''});
+  smPricesSave();
+  smRender();
+}
+function smPriceDelRow(id){
+  if(!smPrices) return;
+  smPrices.items = smPrices.items.filter(function(it){ return it.id!==id; });
+  smPricesSave();
+  smRender();
+}
+function smPriceSetField(id,field,val){
+  if(!smPrices) return;
+  var it = smPrices.items.find(function(x){ return x.id===id; });
+  if(it){ it[field]=(field==='price'?parseFloat(val)||val:val); smPricesSave(); }
+}
+function smRenderAnalysisView(wrap){
+  var yr = smAnalysisYear;
+  var byMonth = {};
+  Object.keys(smData||{}).forEach(function(wk){
+    var wkYr=parseInt(wk.slice(0,4)), wkN=parseInt(wk.slice(6));
+    if(wkYr!==yr) return;
+    var dates7 = wrISOWeekDates(wkYr,wkN);
+    if(!dates7||!dates7.length) return;
+    var mn = parseInt(dates7[0].slice(5,7));
+    var moKey = yr+'-'+(mn<10?'0':'')+mn;
+    if(!byMonth[moKey]) byMonth[moKey]={tom:{cs:0,sl:0,ca:0,nt:0},let:{cs:0,sl:0,ca:0,nt:0},byDestTom:{},byDestLet:{}};
+    ['tomato','lettuce'].forEach(function(crop){
+      var rows=(smData[wk]&&smData[wk][crop])||[];
+      rows.forEach(function(row){
+        var tq=0; dates7.forEach(function(d){ tq+=parseFloat(row.qty&&row.qty[d])||0; });
+        var cp=parseFloat(row.casePack)||1, uP=parseFloat(row.unitPrice)||0, cm=parseFloat(row.commission)||0;
+        var sl=tq*cp*uP, ca=sl*cm/100, nt=sl-ca;
+        var dest=(row.dest||'').trim()||'未設定';
+        var m=byMonth[moKey];
+        if(crop==='tomato'){
+          m.tom.cs+=tq; m.tom.sl+=sl; m.tom.ca+=ca; m.tom.nt+=nt;
+          if(!m.byDestTom[dest]) m.byDestTom[dest]={cs:0,sl:0,nt:0};
+          m.byDestTom[dest].cs+=tq; m.byDestTom[dest].sl+=sl; m.byDestTom[dest].nt+=nt;
+        } else {
+          m.let.cs+=tq; m.let.sl+=sl; m.let.ca+=ca; m.let.nt+=nt;
+          if(!m.byDestLet[dest]) m.byDestLet[dest]={cs:0,sl:0,nt:0};
+          m.byDestLet[dest].cs+=tq; m.byDestLet[dest].sl+=sl; m.byDestLet[dest].nt+=nt;
+        }
+      });
+    });
+  });
+  var totT={cs:0,sl:0,nt:0}, totL={cs:0,sl:0,nt:0};
+  Object.values(byMonth).forEach(function(m){
+    totT.cs+=m.tom.cs; totT.sl+=m.tom.sl; totT.nt+=m.tom.nt;
+    totL.cs+=m.let.cs; totL.sl+=m.let.sl; totL.nt+=m.let.nt;
+  });
+  var G='#2f9e44', B='#1971c2', R='#c0392b';
+  var fc=function(v,c){ return '<span style="color:'+c+'">'+Math.round(v).toLocaleString()+'</span>'; };
+  var months=Object.keys(byMonth).sort();
+  var mRows=months.map(function(mo){
+    var m=byMonth[mo]; var mn=parseInt(mo.slice(5));
+    var tot=m.tom.sl+m.let.sl, totN=m.tom.nt+m.let.nt;
+    return '<tr><td class="label">'+mn+'月</td>'+
+      '<td>'+m.tom.cs.toFixed(1)+'</td><td>'+fc(m.tom.sl,G)+'</td><td>'+fc(m.tom.nt,G)+'</td>'+
+      '<td>'+m.let.cs.toFixed(1)+'</td><td>'+fc(m.let.sl,B)+'</td><td>'+fc(m.let.nt,B)+'</td>'+
+      '<td><b>'+fc(tot,'#555')+'</b></td><td><b>'+fc(totN,totN>=0?G:R)+'</b></td></tr>';
+  }).join('');
+  var totAll=totT.sl+totL.sl, totAllN=totT.nt+totL.nt;
+  mRows+='<tr class="total-row"><td class="label">年計</td>'+
+    '<td>'+totT.cs.toFixed(1)+'</td><td>'+fc(totT.sl,G)+'</td><td>'+fc(totT.nt,G)+'</td>'+
+    '<td>'+totL.cs.toFixed(1)+'</td><td>'+fc(totL.sl,B)+'</td><td>'+fc(totL.nt,B)+'</td>'+
+    '<td><b>'+fc(totAll,'#555')+'</b></td><td><b>'+fc(totAllN,totAllN>=0?G:R)+'</b></td></tr>';
+  var mTable=months.length===0
+    ?'<div style="color:var(--text-m);text-align:center;padding:20px">'+yr+'年のデータがありません。</div>'
+    :'<div style="overflow-x:auto"><table class="sma-table"><thead>'+
+      '<tr><th rowspan="2">月</th>'+
+      '<th colspan="3" style="background:#e8f5e9">🍅 トマト</th>'+
+      '<th colspan="3" style="background:#e3f2fd">🥬 レタス</th>'+
+      '<th colspan="2">合計</th></tr>'+
+      '<tr><th style="background:#e8f5e9">c/s</th><th style="background:#e8f5e9">売上(円)</th><th style="background:#e8f5e9">純売上(円)</th>'+
+      '<th style="background:#e3f2fd">c/s</th><th style="background:#e3f2fd">売上(円)</th><th style="background:#e3f2fd">純売上(円)</th>'+
+      '<th>売上(円)</th><th>純売上(円)</th></tr></thead>'+
+      '<tbody>'+mRows+'</tbody></table></div>';
+  var isTom=smAnalysisCrop==='tomato';
+  var destMap={};
+  Object.values(byMonth).forEach(function(m){
+    var src=isTom?m.byDestTom:m.byDestLet;
+    Object.keys(src).forEach(function(d){
+      if(!destMap[d]) destMap[d]={cs:0,sl:0,nt:0};
+      destMap[d].cs+=src[d].cs; destMap[d].sl+=src[d].sl; destMap[d].nt+=src[d].nt;
+    });
+  });
+  var dList=Object.keys(destMap).sort(function(a,b){ return destMap[b].sl-destMap[a].sl; });
+  var dRows=dList.map(function(d){
+    var v=destMap[d];
+    return '<tr><td class="label">'+escHtml(d)+'</td>'+
+      '<td>'+v.cs.toFixed(1)+'</td>'+
+      '<td>'+fc(v.sl,isTom?G:B)+'</td>'+
+      '<td>'+fc(v.nt,v.nt>=0?G:R)+'</td></tr>';
+  }).join('');
+  var dTable=dList.length===0
+    ?'<div style="color:var(--text-m);padding:12px">データなし</div>'
+    :'<div style="overflow-x:auto"><table class="sma-table"><thead><tr>'+
+      '<th style="text-align:left">販売先</th><th>c/s</th><th>売上(円)</th><th>純売上(円)</th>'+
+      '</tr></thead><tbody>'+dRows+'</tbody></table></div>';
+  var cards='<div class="sma-cards">'+
+    '<div class="sma-card"><div class="sma-card-title">🍅 トマト年間売上</div>'+
+    '<div class="sma-card-val" style="color:'+G+'">¥'+Math.round(totT.sl).toLocaleString()+'</div>'+
+    '<div class="sma-card-sub">純売上 ¥'+Math.round(totT.nt).toLocaleString()+'</div></div>'+
+    '<div class="sma-card"><div class="sma-card-title">🥬 レタス年間売上</div>'+
+    '<div class="sma-card-val" style="color:'+B+'">¥'+Math.round(totL.sl).toLocaleString()+'</div>'+
+    '<div class="sma-card-sub">純売上 ¥'+Math.round(totL.nt).toLocaleString()+'</div></div>'+
+    '<div class="sma-card"><div class="sma-card-title">📦 合計年間売上</div>'+
+    '<div class="sma-card-val">¥'+Math.round(totAll).toLocaleString()+'</div>'+
+    '<div class="sma-card-sub">純売上 ¥'+Math.round(totAllN).toLocaleString()+'</div></div>'+
+    '</div>';
+  wrap.innerHTML = smModeBar()+
+    '<div class="sma-wrap">'+
+    '<div class="sma-year-nav">'+
+    '<button class="btn btn-g" onclick="smAnalysisYear--;smRender()">◀</button>'+
+    '<b style="font-size:14px;padding:0 10px">'+yr+'年</b>'+
+    '<button class="btn btn-g" onclick="smAnalysisYear++;smRender()">▶</button>'+
+    '</div>'+
+    cards+
+    '<div class="sma-section"><div class="sma-section-hd">📅 月別集計</div>'+mTable+'</div>'+
+    '<div class="sma-section"><div class="sma-section-hd">🏪 販売先別集計</div>'+
+    '<div class="sm-tabs" style="margin-bottom:6px">'+
+    '<button class="sm-tab'+(isTom?' active':'')+'" onclick="smAnalysisCrop=\'tomato\';smRender()">🍅 トマト</button>'+
+    '<button class="sm-tab'+(!isTom?' active':'')+'" onclick="smAnalysisCrop=\'lettuce\';smRender()">🥬 レタス</button>'+
+    '</div>'+dTable+'</div>'+
+    '</div>';
+}
+function smPriceResetDefault(){
+  if(!confirm('単価データをデフォルトに戻しますか？\n（現在の編集内容はすべて上書きされます）')) return;
+  smPrices = {items: SM_PRICES_DEFAULT.map(function(r,i){
+    return {id: Date.now()+i, cat:r[0], name:r[1], price:r[2], supplier:r[3]};
+  })};
+  smPricesSave();
+  smPriceCatFilter=''; smPriceSearch='';
+  smRender();
+}
+function smRenderPricesView(wrap){
+  if(!smPrices) smPricesLoad();
+  var items=smPrices.items;
+  var cats=[]; items.forEach(function(it){ if(cats.indexOf(it.cat)<0) cats.push(it.cat); });
+  var q=smPriceSearch.toLowerCase();
+  var filtered=items.filter(function(it){
+    var catOk=!smPriceCatFilter||it.cat===smPriceCatFilter;
+    var srOk=!q||String(it.name).toLowerCase().indexOf(q)>=0||
+      String(it.cat).toLowerCase().indexOf(q)>=0||
+      String(it.supplier||'').toLowerCase().indexOf(q)>=0;
+    return catOk&&srOk;
+  });
+  var catBtns='<button class="smp-cat-btn'+(smPriceCatFilter===''?' active':'')+'" onclick="smPriceCatFilter=\'\';smRender()">全て('+items.length+')</button>'+
+    cats.map(function(c){
+      var n=items.filter(function(x){return x.cat===c;}).length;
+      return '<button class="smp-cat-btn'+(smPriceCatFilter===c?' active':'')+
+        '" onclick="smPriceCatFilter=\''+c.replace(/'/g,"\\'")+ '\';smRender()">'+escHtml(c)+'('+n+')</button>';
+    }).join('');
+  // datalist for category autocomplete
+  var dlId='smpCatList';
+  var datalist='<datalist id="'+dlId+'">'+
+    cats.map(function(c){ return '<option value="'+escHtml(c)+'">'; }).join('')+
+    '</datalist>';
+  var bycat={};
+  filtered.forEach(function(it){ if(!bycat[it.cat]) bycat[it.cat]=[]; bycat[it.cat].push(it); });
+  var tbRows='';
+  Object.keys(bycat).forEach(function(cat){
+    tbRows+='<tr class="smp-cat-hd"><td colspan="5" style="padding:5px 8px">▶ '+escHtml(cat)+'</td></tr>';
+    bycat[cat].forEach(function(it){
+      tbRows+=
+        '<tr>'+
+        '<td><input class="smp-in label" list="'+dlId+'" value="'+escHtml(String(it.cat||''))+'" placeholder="大分類" style="min-width:90px" onchange="smPriceSetField('+it.id+',\'cat\',this.value)"></td>'+
+        '<td><input class="smp-in label" value="'+escHtml(String(it.name||''))+'" placeholder="品名" onchange="smPriceSetField('+it.id+',\'name\',this.value)"></td>'+
+        '<td style="text-align:right"><input class="smp-in" type="number" step="0.01" value="'+(it.price!==''&&it.price!==null?it.price:'')+'" style="width:90px;text-align:right" onchange="smPriceSetField('+it.id+',\'price\',this.value)"></td>'+
+        '<td><input class="smp-in label" value="'+escHtml(String(it.supplier||''))+'" placeholder="取引先" onchange="smPriceSetField('+it.id+',\'supplier\',this.value)"></td>'+
+        '<td><button class="smp-del-btn" onclick="smPriceDelRow('+it.id+')" title="削除">✕</button></td>'+
+        '</tr>';
+    });
+  });
+  if(filtered.length===0) tbRows='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-m)">該当なし</td></tr>';
+  wrap.innerHTML = smModeBar()+
+    datalist+
+    '<div class="smp-wrap">'+
+    '<div class="smp-toolbar">'+
+    '<input class="smp-search" type="text" placeholder="🔍 品名・取引先で検索..." value="'+escHtml(smPriceSearch)+'" oninput="smPriceSearch=this.value;smRender()">'+
+    catBtns+
+    '<div style="flex:1"></div>'+
+    '<button class="smp-add-btn" onclick="smPriceAddRow()">＋ 行を追加</button>'+
+    '<button class="smp-add-btn" style="background:#888;margin-left:6px" onclick="smPriceResetDefault()" title="デフォルトデータに戻す">↺ リセット</button>'+
+    '</div>'+
+    '<div class="smp-note">'+filtered.length+'件表示 / 全'+items.length+'件</div>'+
+    '<div class="smp-table-wrap"><table class="smp-table">'+
+    '<thead><tr>'+
+    '<th style="min-width:100px;text-align:left">大分類</th>'+
+    '<th style="min-width:200px;text-align:left">項目</th>'+
+    '<th style="min-width:90px">単価（円）</th>'+
+    '<th style="min-width:120px;text-align:left">取引先</th>'+
+    '<th style="width:30px"></th>'+
+    '</tr></thead>'+
+    '<tbody>'+tbRows+'</tbody>'+
+    '</table></div>'+
+    '</div>';
 }
 
 // ══════════════════════════════════════════════════════
@@ -10363,6 +10651,8 @@ async function jsonLoadAll(dir){
     if(wr && typeof wr==='object'){ wrData=wr; localStorage.setItem(WR_KEY,JSON.stringify(wrData)); }
     var sm = await readJson('memo-salesman.json', null);
     if(sm && typeof sm==='object'){ smData=sm; localStorage.setItem(SM_KEY,JSON.stringify(smData)); }
+    var pr = await readJson('memo-prices.json', null);
+    if(pr && pr.items){ smPrices=pr; localStorage.setItem(SM_PRICES_KEY,JSON.stringify(smPrices)); }
     var tpl = await readJson('memo-templates.json', null);
     if(tpl){ localStorage.setItem('md_templates_v1',JSON.stringify(tpl)); }
     return true;
@@ -10388,6 +10678,7 @@ async function jsonSaveAll(){
     await jsonWriteFile(dir,'memo-wreport.json', wr);
     var sm={}; try{ sm=JSON.parse(localStorage.getItem('md_smdata_v1')||'{}'); }catch(e){}
     await jsonWriteFile(dir,'memo-salesman.json', sm);
+    await jsonWriteFile(dir,'memo-prices.json', smPrices||{items:[]});
     var tpl=null; try{ tpl=JSON.parse(localStorage.getItem('md_templates_v1')||'null'); }catch(e){}
     if(tpl) await jsonWriteFile(dir,'memo-templates.json', tpl);
     // 統合バックアップも更新
