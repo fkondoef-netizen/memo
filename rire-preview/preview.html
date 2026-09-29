@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Rire Preview</title>
+<style>html,body{margin:0;min-height:100%;background:#0a0a0a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}.loading{min-height:100vh;display:grid;place-items:center;text-align:center;padding:24px}.loading b{font-size:28px;letter-spacing:-.04em}.loading span{display:block;margin-top:12px;font-size:12px;color:#aaa}</style>
+<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+</head>
+<body>
+<div class="loading"><div><b>Rire</b><span>Loading preview…</span></div></div>
+<script>
+(async()=>{
+ try{
+  const raw='https://raw.githubusercontent.com/fkondoef-netizen/memo/rire-preview/rire-preview/index.html';
+  const wrapper=await fetch(raw,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('GitHub file fetch failed');return r.text()});
+  const m=wrapper.match(/atob\("([A-Za-z0-9+/=]+)"\)/);
+  if(!m)throw new Error('Preview data not found');
+  const bin=atob(m[1]);
+  const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  const html=new TextDecoder('utf-8').decode(pako.ungzip(bytes));
+  document.open();document.write(html);document.close();
+ }catch(e){
+  document.body.innerHTML='<div style="padding:30px;font-family:-apple-system,sans-serif;color:#fff;background:#111;min-height:100vh"><h1>Rire Preview</h1><p>表示エラーが発生しました。</p><pre style="white-space:pre-wrap;color:#bbb">'+String(e)+'</pre></div>';
+ }
+})();
+</script>
+</body>
+</html>
